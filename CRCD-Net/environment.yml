@@ -1,0 +1,14 @@
+name: crcd-net
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - flask
+  - numpy
+  - pandas
+  - scikit-learn
+  - matplotlib
+  - pip
+  - pip:
+      - python-dotenv
+      - requests
