@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify
 from config import Config
 from backend.api.routes import api
 
@@ -8,7 +8,13 @@ app.register_blueprint(api)
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # This Flask app is the API only -- the actual UI is the Streamlit
+    # dashboard (CRCD-Net/dashboard/dashboard.py), not a page served here.
+    return jsonify({
+        'service': 'CRCD-Net backend API',
+        'ui': 'Run the Streamlit dashboard separately: cd dashboard && streamlit run dashboard.py',
+        'endpoints': ['/api/health', '/api/analysis', '/api/analysis/<id>', '/api/analysis/history'],
+    })
 
 
 if __name__ == '__main__':
