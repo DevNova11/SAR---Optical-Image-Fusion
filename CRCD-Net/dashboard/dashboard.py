@@ -51,238 +51,368 @@ st.set_page_config(
 )
 
 # --------------------------------------------------
-# CUSTOM CSS (Light theme, black accents, gray placeholder cards)
+# CUSTOM CSS ("Signal console" dark theme: void black, phosphor green,
+# monospace readouts -- see dashboard/SIGNAL_REFERENCE.html for the
+# original design reference this is adapted from)
 # --------------------------------------------------
 
 st.markdown(
     """
     <style>
 
-    /* Force a white app background everywhere, regardless of the
-       viewer's Streamlit theme (light or dark) */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap');
+
+    :root {
+        --void: #0a0c0a;
+        --panel: #12160f;
+        --panel-raised: #161c13;
+        --hairline: #2a3226;
+        --hairline-soft: #1c2318;
+        --phosphor: #7fffa0;
+        --phosphor-dim: #3f7a55;
+        --optical: #5aa8ff;
+        --fused: #e8ffb0;
+        --paper: #eaf2e6;
+        --paper-dim: #8fa08c;
+    }
+
     html, body, .stApp,
     [data-testid="stAppViewContainer"],
     [data-testid="stHeader"],
     [data-testid="stMain"],
     .main, .block-container {
-        background-color: #ffffff !important;
+        background-color: var(--void) !important;
+        font-family: 'IBM Plex Sans', system-ui, sans-serif !important;
     }
 
-    /* Force default body text to dark so it is always readable
-       on the white background above */
     [data-testid="stAppViewContainer"] * {
-        color: #1a1a1a;
+        color: var(--paper);
     }
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
+    [data-testid="stHeader"] { background-color: transparent !important; }
+
+    .block-container { padding-top: 2rem; padding-bottom: 2rem; }
 
     /* Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #1a1a1a !important;
+        background-color: var(--panel) !important;
+        border-right: 1px solid var(--hairline);
     }
 
-    section[data-testid="stSidebar"] * {
-        color: #ffffff !important;
+    section[data-testid="stSidebar"] * { color: var(--paper) !important; }
+
+    section[data-testid="stSidebar"] h1 {
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 1.1rem !important;
+        letter-spacing: 0.04em;
+        color: var(--phosphor) !important;
     }
+
+    section[data-testid="stSidebar"] hr { border-color: var(--hairline-soft); }
 
     section[data-testid="stSidebar"] .stRadio label {
-        font-weight: 500;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] {
+        color: var(--paper-dim) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.7rem !important;
+    }
+
+    /* Headings in general */
+    h1, h2, h3 {
+        font-family: 'Space Grotesk', sans-serif !important;
+        color: var(--paper) !important;
     }
 
     /* Hero section */
     .hero {
-        padding: 3rem;
-        border-radius: 4px;
-        background-color: #ffffff;
+        padding: 3rem 0;
         text-align: left;
-        margin-bottom: 2rem;
-        border-bottom: 2px solid #1a1a1a;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--hairline);
+    }
+
+    .hero .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--phosphor) !important;
+        margin-bottom: 1.2rem;
+    }
+
+    .hero .badge::before {
+        content: "";
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--phosphor);
+        box-shadow: 0 0 6px 2px rgba(127,255,160,.6);
     }
 
     .hero h1 {
         font-size: 3rem;
-        margin-bottom: 0.5rem;
-        color: #1a1a1a !important;
-        font-weight: 800;
+        margin-bottom: 0.8rem;
+        color: var(--paper) !important;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        line-height: 1.08;
+    }
+
+    .hero h1 em {
+        font-style: normal;
+        color: var(--phosphor) !important;
     }
 
     .hero p {
-        font-size: 1.1rem;
-        color: #4a4a4a !important;
-    }
-
-    .badge {
-        display: inline-block;
-        background-color: #1a1a1a;
-        color: #ffffff !important;
-        padding: 0.4rem 1rem;
-        border-radius: 3px;
-        font-weight: 600;
-        margin-bottom: 1rem;
+        font-size: 1rem;
+        color: var(--paper-dim) !important;
+        max-width: 620px;
+        line-height: 1.7;
     }
 
     /* Section titles */
     .section-title {
-        font-size: 1.8rem;
-        font-weight: 800;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 1.7rem;
+        font-weight: 700;
         margin-top: 2.5rem;
-        margin-bottom: 0.3rem;
-        color: #1a1a1a !important;
-        text-align: center;
+        margin-bottom: 0.4rem;
+        color: var(--paper) !important;
+        text-align: left;
+    }
+
+    .band-tag {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--phosphor-dim) !important;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-top: 2.2rem;
+    }
+
+    .band-tag::before {
+        content: "";
+        width: 5px; height: 5px;
+        background: var(--phosphor);
     }
 
     .section-underline {
-        width: 50px;
-        height: 3px;
-        background-color: #1a1a1a;
-        margin: 0 auto 2rem auto;
+        width: 40px;
+        height: 2px;
+        background-color: var(--phosphor);
+        margin: 0 0 1.8rem 0;
     }
 
     /* Cards */
     .card {
         padding: 1.5rem;
-        border-radius: 4px;
-        background-color: #d9d9d9;
+        background-color: var(--panel);
+        border: 1px solid var(--hairline);
         text-align: left;
         min-height: 160px;
     }
 
     .card h4 {
-        color: #1a1a1a !important;
-        font-weight: 700;
+        font-family: 'Space Grotesk', sans-serif;
+        color: var(--paper) !important;
+        font-weight: 600;
         margin-bottom: 0.5rem;
     }
 
     .card p {
-        color: #333333 !important;
-        font-size: 0.9rem;
+        color: var(--paper-dim) !important;
+        font-size: 0.88rem;
         margin: 0;
+        line-height: 1.6;
     }
 
     .metric-card {
-        padding: 1.5rem;
-        border-radius: 4px;
-        background-color: #f2f2f2;
+        padding: 1.4rem;
+        background-color: var(--panel);
         text-align: center;
-        border: 1px solid #d9d9d9;
+        border: 1px solid var(--hairline);
     }
 
     .metric-card h4 {
-        color: #1a1a1a !important;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--paper-dim) !important;
+        font-weight: 500;
+        margin-bottom: 0.6rem;
     }
 
     .metric-card p {
-        color: #1a1a1a !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        color: var(--phosphor) !important;
     }
 
     .placeholder-box {
-        background-color: #d9d9d9;
-        border-radius: 4px;
+        background-color: var(--panel);
+        border: 1px dashed var(--hairline);
         height: 220px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #666666 !important;
-        font-weight: 600;
+        color: var(--paper-dim) !important;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
         margin-bottom: 0.8rem;
     }
 
     /* Buttons */
     .stButton > button {
-        background-color: #1a1a1a;
-        color: #ffffff !important;
-        border-radius: 3px;
-        font-weight: 600;
-        border: none;
-        padding: 0.6rem 1.2rem;
+        background-color: transparent;
+        color: var(--phosphor) !important;
+        border: 1px solid var(--phosphor);
+        border-radius: 0;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 500;
+        padding: 0.7rem 1.4rem;
+        transition: 0.15s;
     }
 
     .stButton > button:hover {
-        background-color: #333333;
-        color: #ffffff !important;
+        background-color: var(--phosphor);
+        color: var(--void) !important;
+        box-shadow: 0 0 24px rgba(127,255,160,.3);
+        border-color: var(--phosphor);
     }
 
-    .stButton > button * {
-        color: #ffffff !important;
-    }
+    .stButton > button * { color: inherit !important; }
 
-    /* Info / success boxes: force readable text on their own light
-       background so it never inherits a mismatched theme color */
+    /* Info / success / error / warning boxes */
     .stAlert, [data-testid="stAlert"] {
-        background-color: #eef4fb !important;
-        border-radius: 4px;
+        background-color: var(--panel) !important;
+        border: 1px solid var(--hairline);
+        border-left: 3px solid var(--phosphor);
+        border-radius: 0;
     }
 
     .stAlert *, [data-testid="stAlert"] * {
-        color: #1a1a1a !important;
+        color: var(--paper) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.85rem !important;
     }
 
-    /* Number input & date input fields (Latitude, Longitude,
-       Date 1, Date 2): force white field background with dark,
-       clearly visible text and value. Streamlit's date input does
-       not always render a plain <input>, so every descendant is
-       targeted, not just the input tag. */
+    /* Number / date / select inputs */
     [data-testid="stNumberInput"],
-    [data-testid="stDateInput"] {
-        color: #1a1a1a !important;
+    [data-testid="stDateInput"],
+    [data-testid="stSelectbox"] {
+        color: var(--paper) !important;
     }
 
     [data-testid="stNumberInput"] *,
-    [data-testid="stDateInput"] * {
-        color: #1a1a1a !important;
-        -webkit-text-fill-color: #1a1a1a !important;
+    [data-testid="stDateInput"] *,
+    [data-testid="stSelectbox"] * {
+        color: var(--paper) !important;
+        -webkit-text-fill-color: var(--paper) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
     }
 
     [data-testid="stNumberInput"] input,
     [data-testid="stDateInput"] input,
+    [data-testid="stSelectbox"] input,
     .stNumberInput input,
     .stDateInput input {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-        -webkit-text-fill-color: #1a1a1a !important;
-        border: 1px solid #cccccc !important;
-        caret-color: #1a1a1a !important;
+        background-color: var(--panel-raised) !important;
+        color: var(--paper) !important;
+        -webkit-text-fill-color: var(--paper) !important;
+        border: 1px solid var(--hairline) !important;
+        border-radius: 0 !important;
+        caret-color: var(--phosphor) !important;
     }
 
     [data-testid="stNumberInput"] div,
     [data-testid="stDateInput"] div,
+    [data-testid="stSelectbox"] div,
     [data-testid="stNumberInput"] div[data-baseweb="input"],
     [data-testid="stDateInput"] div[data-baseweb="input"],
     [data-testid="stNumberInput"] div[data-baseweb="base-input"],
-    [data-testid="stDateInput"] div[data-baseweb="base-input"] {
-        background-color: #ffffff !important;
+    [data-testid="stDateInput"] div[data-baseweb="base-input"],
+    [data-testid="stSelectbox"] div[data-baseweb="select"] {
+        background-color: var(--panel-raised) !important;
+        border-color: var(--hairline) !important;
+        border-radius: 0 !important;
     }
 
-    /* Number input +/- step buttons */
     [data-testid="stNumberInput"] button {
-        background-color: #f2f2f2 !important;
-        color: #1a1a1a !important;
+        background-color: var(--panel-raised) !important;
+        color: var(--phosphor) !important;
+        border-color: var(--hairline) !important;
     }
 
-    /* Date picker calendar icon and popover calendar (when opened) */
-    [data-testid="stDateInput"] svg {
-        fill: #1a1a1a !important;
+    [data-testid="stDateInput"] svg, [data-testid="stSelectbox"] svg {
+        fill: var(--phosphor) !important;
     }
 
     div[data-baseweb="calendar"],
-    div[data-baseweb="popover"] {
-        background-color: #ffffff !important;
+    div[data-baseweb="popover"],
+    ul[data-testid="stSelectboxVirtualDropdown"] {
+        background-color: var(--panel-raised) !important;
+        border: 1px solid var(--hairline) !important;
     }
 
-    div[data-baseweb="calendar"] * {
-        color: #1a1a1a !important;
+    div[data-baseweb="calendar"] *,
+    ul[data-testid="stSelectboxVirtualDropdown"] * {
+        color: var(--paper) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
     }
 
-    /* Widget labels (Latitude, Longitude, Date 1, Date 2, etc.) */
+    li[aria-selected="true"] {
+        background-color: var(--hairline-soft) !important;
+    }
+
+    /* Widget labels */
     [data-testid="stWidgetLabel"] p,
     [data-testid="stWidgetLabel"] label {
-        color: #1a1a1a !important;
+        color: var(--phosphor-dim) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.72rem !important;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
+
+    /* Radio group (Area source, Navigation) */
+    [data-testid="stRadio"] label {
+        font-family: 'IBM Plex Mono', monospace !important;
+    }
+
+    [data-testid="stCaptionContainer"] {
+        color: var(--paper-dim) !important;
+        font-family: 'IBM Plex Mono', monospace !important;
+        font-size: 0.78rem !important;
+    }
+
+    /* Expander */
+    [data-testid="stExpander"] {
+        background-color: var(--panel) !important;
+        border: 1px solid var(--hairline) !important;
+        border-radius: 0 !important;
+    }
+
+    /* Images: hairline frame to match the console aesthetic */
+    [data-testid="stImage"] img {
+        border: 1px solid var(--hairline);
+    }
+
+    hr { border-color: var(--hairline-soft) !important; }
 
     </style>
     """,
@@ -326,13 +456,16 @@ if page == "Home":
         """
         <div class="hero">
 
-        <div class="badge">SAR-Optical Fusion Platform</div>
+        <div class="badge">SENTINEL-1 &middot; SENTINEL-2 // DUAL-CHANNEL</div>
 
-        <h1>CRCD-Net</h1>
+        <h1>Two signals.<br>One <em>ground truth</em>.</h1>
 
         <p>
-        An intelligent remote sensing platform for
-        combining SAR and optical satellite imagery to detect change.
+        CRCD-Net reads the radar backscatter of Sentinel-1 against the spectral
+        detail of Sentinel-2, standardizes both to a common scale, and resolves
+        where the two disagree between two dates &mdash; that disagreement is change.
+        Cross-checked against a real pretrained land-cover model, not just a
+        pixel-difference guess.
         </p>
 
         </div>
@@ -341,7 +474,8 @@ if page == "Home":
     )
 
     st.markdown(
-        '<div class="section-title">What can CRCD-Net do?</div>'
+        '<div class="band-tag">Signal Chain</div>'
+        '<div class="section-title">What each channel contributes</div>'
         '<div class="section-underline"></div>',
         unsafe_allow_html=True
     )
@@ -352,9 +486,10 @@ if page == "Home":
         st.markdown(
             """
             <div class="card">
-            <h4>SAR Processing</h4>
-            <p>Process Sentinel-1 SAR imagery
-            and extract useful spatial information.</p>
+            <h4>SAR &mdash; Structural Return</h4>
+            <p>Radar backscatter from Sentinel-1 penetrates cloud cover and
+            works day or night &mdash; it reads surface roughness and structure,
+            not color.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -364,9 +499,10 @@ if page == "Home":
         st.markdown(
             """
             <div class="card">
-            <h4>Optical Processing</h4>
-            <p>Process Sentinel-2 optical imagery
-            and preserve multispectral information.</p>
+            <h4>Optical &mdash; Spectral Reference</h4>
+            <p>Sentinel-2 multispectral imagery preserves reflectance across
+            visible and infrared bands &mdash; ground truth for what things
+            actually look like.</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -376,25 +512,26 @@ if page == "Home":
         st.markdown(
             """
             <div class="card">
-            <h4>Image Fusion</h4>
-            <p>Combine SAR and optical information
-            using the CRCD-Net fusion model.</p>
+            <h4>Fusion &mdash; Cross-Channel Blend</h4>
+            <p>Each modality is standardized to a common scale, then blended
+            per-pixel into a single fused representation the change detector
+            reads from.</p>
             </div>
             """,
             unsafe_allow_html=True
         )
 
     st.markdown(
-        '<div class="section-title">System Pipeline</div>'
+        '<div class="band-tag">Processing Path</div>'
+        '<div class="section-title">Signal path, scene to result</div>'
         '<div class="section-underline"></div>',
         unsafe_allow_html=True
     )
 
     st.write(
         """
-        Satellite Data -> Preprocessing -> SAR + Optical
-        -> Feature Extraction -> Attention Fusion
-        -> Fused Image -> Change Detection -> Results
+        Satellite Data -> Validate -> Preprocess -> Standardize & Fuse
+        -> Change Detection -> Pretrained-Model Cross-Check -> Results
         """
     )
 
