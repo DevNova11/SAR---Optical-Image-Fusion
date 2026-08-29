@@ -90,13 +90,16 @@ authenticated — see `gee_data_collection.py`).
 
 ## 6. Demo AOIs (pre-exported, checked into `data/`)
 
-Both validated end-to-end (`validate_export.py` passes, 0% nodata, plausible
-band stats) via the real pipeline against live GEE data — not synthetic.
+All three validated end-to-end (`validate_export.py` passes, 0% nodata,
+plausible band stats) via the real pipeline against live GEE data — not
+synthetic. Two show urbanization, one shows deforestation/land-clearing, so
+the demo can tell either story.
 
 | `aoi_name`           | date_1       | date_2       | Grid      | Story |
 |-----------------------|--------------|--------------|-----------|-------|
 | `bengaluru_sarjapur`  | 2019-02-01   | 2024-02-01   | 330x336   | Sarjapur Road corridor, Bengaluru — rapid residential/IT-park urbanization |
 | `chennai_oragadam`    | 2018-02-25   | 2023-02-14   | 437x445   | Oragadam industrial corridor, Chennai — large-scale industrial land conversion |
+| `chimakurthy_quarry`  | 2018-02-03   | 2023-01-28   | 540x557   | Granite quarry belt, Chimakurthy (Prakasam, AP) — visible deforestation/quarry expansion (16.1% of pixels show a strong NDVI drop between dates) |
 
 Both date pairs were chosen with `suggest_best_dates()` (dry season,
 lowest-cloud date per year) and are ready to feed straight into
