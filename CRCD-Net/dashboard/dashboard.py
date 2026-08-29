@@ -637,14 +637,23 @@ elif page == "Fusion & Results":
         land_cover_label = st.session_state.get("land_cover_label")
         if land_cover_delta:
             st.markdown(
-                '<div class="metric-card" style="margin-top:0.8rem;">'
-                '<h4>Pretrained-Model Signal (Dynamic World)</h4>'
-                f'<p style="font-size:1.1rem; font-weight:700;">{land_cover_label}</p>'
-                f'<p style="font-size:0.85rem;">built &Delta; {land_cover_delta["built_delta"]:+.4f}'
-                f' &nbsp;|&nbsp; trees &Delta; {land_cover_delta["trees_delta"]:+.4f}</p>'
-                '</div>',
+                '<p style="margin-top:0.8rem; font-weight:600;">'
+                f'Pretrained-Model Signal (Dynamic World): {land_cover_label}</p>',
                 unsafe_allow_html=True
             )
+            lcol1, lcol2 = st.columns(2)
+            with lcol1:
+                st.markdown(
+                    '<div class="metric-card"><h4>Built Cover Change</h4>'
+                    f'<p style="font-size:1.5rem; font-weight:700;">{land_cover_delta["built_delta"]*100:+.2f}%</p></div>',
+                    unsafe_allow_html=True
+                )
+            with lcol2:
+                st.markdown(
+                    '<div class="metric-card"><h4>Tree Cover Change</h4>'
+                    f'<p style="font-size:1.5rem; font-weight:700;">{land_cover_delta["trees_delta"]*100:+.2f}%</p></div>',
+                    unsafe_allow_html=True
+                )
         else:
             st.caption(
                 "No Dynamic World land-cover signal available for this run "
