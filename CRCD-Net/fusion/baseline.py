@@ -92,6 +92,23 @@ def _sanitize_array(arr: np.ndarray, name: str) -> np.ndarray:
     return arr
 
 
+def _standardize_per_channel(arr: np.ndarray) -> np.ndarray:
+    """Z-score each channel independently.
+
+    SAR backscatter (dB, e.g. -25..0) and optical reflectance (0..1) sit on
+    wildly different numeric scales. Without this, a "50/50" weighted
+    average is actually ~100% SAR by magnitude -- whichever modality has
+    bigger raw numbers dominates regardless of the weights. Standardizing
+    both to comparable scale first is what makes the weights meaningful.
+    """
+    out = np.empty_like(arr, dtype=np.float32)
+    for c in range(arr.shape[0]):
+        channel = arr[c]
+        mean, std = float(channel.mean()), float(channel.std())
+        out[c] = (channel - mean) / std if std > 1e-8 else np.zeros_like(channel)
+    return out
+
+
 def _weighted_fusion(
     s1: np.ndarray,
     s2: np.ndarray,
@@ -101,7 +118,12 @@ def _weighted_fusion(
     """Performs weighted fusion of S1 (SAR) and S2 (Optical) arrays.
 
     Handles differing channel counts (C1 != C2) by projecting/mapping channels to target_channels.
+    Each modality is standardized per-channel first (see _standardize_per_channel) so the
+    `weights` actually control the blend instead of being swamped by scale differences.
     """
+    s1 = _standardize_per_channel(s1)
+    s2 = _standardize_per_channel(s2)
+
     c1, h, w = s1.shape
     c2, _, _ = s2.shape
 
@@ -138,7 +160,17 @@ def _weighted_fusion(
         s2_proj = np.stack([chunk.mean(axis=0) for chunk in s2_proj], axis=0)
 
     fused = w1 * s1_proj + w2 * s2_proj
-    return fused
+
+    # Normalize output per channel to [0, 1], matching _pca_fusion's output range
+    fused_norm = np.zeros_like(fused)
+    for c in range(target_channels):
+        c_min, c_max = fused[c].min(), fused[c].max()
+        if c_max > c_min:
+            fused_norm[c] = (fused[c] - c_min) / (c_max - c_min)
+        else:
+            fused_norm[c] = fused[c]
+
+    return fused_norm
 
 
 def _pca_fusion(
@@ -146,7 +178,15 @@ def _pca_fusion(
     s2: np.ndarray,
     target_channels: Optional[int] = None,
 ) -> np.ndarray:
-    """Performs PCA-based spectral-spatial fusion across combined SAR and Optical bands."""
+    """Performs PCA-based spectral-spatial fusion across combined SAR and Optical bands.
+
+    Each modality is standardized per-channel first (see _standardize_per_channel) --
+    PCA's covariance/eigendecomposition is scale-sensitive too, so without this the
+    principal components would just track SAR's much larger raw variance.
+    """
+    s1 = _standardize_per_channel(s1)
+    s2 = _standardize_per_channel(s2)
+
     c1, h, w = s1.shape
     c2, _, _ = s2.shape
 
