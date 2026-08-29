@@ -404,24 +404,53 @@ elif page == "Analysis":
         unsafe_allow_html=True
     )
 
-    st.write(
-        "Pick one of the pre-exported demo areas -- these run instantly, "
-        "no live satellite data pull needed."
+    mode = st.radio(
+        "Area source",
+        ["Demo Area (instant)", "Custom Location (live satellite pull)"],
+        horizontal=True,
     )
 
-    st.subheader("Demo Area")
+    use_custom = mode.startswith("Custom")
 
-    aoi_label = st.selectbox("Area of interest", list(DEMO_AOIS.keys()))
-    aoi_name = aoi_label.split(" (")[0]
-    aoi = DEMO_AOIS[aoi_label]
+    if not use_custom:
+        st.write(
+            "Pick one of the pre-exported demo areas -- these run instantly, "
+            "no live satellite data pull needed."
+        )
+        st.subheader("Demo Area")
+        aoi_label = st.selectbox("Area of interest", list(DEMO_AOIS.keys()))
+        aoi_name = aoi_label.split(" (")[0]
+        aoi_cfg = DEMO_AOIS[aoi_label]
 
-    st.subheader("Observation Dates")
+        st.subheader("Observation Dates")
+        date1_col, date2_col = st.columns(2)
+        with date1_col:
+            st.text_input("Date 1", value=aoi_cfg["date_1"], disabled=True)
+        with date2_col:
+            st.text_input("Date 2", value=aoi_cfg["date_2"], disabled=True)
 
-    date1_col, date2_col = st.columns(2)
-    with date1_col:
-        st.text_input("Date 1", value=aoi["date_1"], disabled=True)
-    with date2_col:
-        st.text_input("Date 2", value=aoi["date_2"], disabled=True)
+    else:
+        st.warning(
+            "Custom locations require a live Google Earth Engine call "
+            "(usually 30s-2min, sometimes fails on a flaky connection -- "
+            "the demo areas above are the reliable path)."
+        )
+        st.subheader("Coordinates")
+        lat_col, lon_col = st.columns(2)
+        with lat_col:
+            latitude = st.number_input("Latitude", value=17.3850, format="%.5f")
+        with lon_col:
+            longitude = st.number_input("Longitude", value=78.4867, format="%.5f")
+
+        st.subheader("Observation Dates")
+        date1_col, date2_col = st.columns(2)
+        with date1_col:
+            custom_date1 = st.date_input("Date 1")
+        with date2_col:
+            custom_date2 = st.date_input("Date 2")
+
+        aoi_name = f"custom_{latitude:.4f}_{longitude:.4f}".replace(".", "p").replace("-", "m")
+        aoi_cfg = {"date_1": custom_date1.isoformat(), "date_2": custom_date2.isoformat()}
 
     st.markdown("---")
 
@@ -429,17 +458,30 @@ elif page == "Analysis":
         "Start Analysis",
         use_container_width=True
     ):
-        with st.spinner("Running data -> fusion -> change detection pipeline..."):
+        spinner_msg = (
+            "Pulling live satellite data (this can take a couple of minutes)..."
+            if use_custom else
+            "Running data -> fusion -> change detection pipeline..."
+        )
+        with st.spinner(spinner_msg):
             try:
+                if use_custom:
+                    import ee
+                    import gee_data_collection as gdc
+                    gdc.init()  # must run before constructing any ee.Geometry
+                    ee_aoi = ee.Geometry.Point([longitude, latitude]).buffer(1000).bounds()
+                else:
+                    ee_aoi = None
+
                 s1_1, s2_1, s1_2, s2_2 = get_training_pair(
-                    None, aoi["date_1"], aoi["date_2"], aoi_name, data_dir=DATA_DIR
+                    ee_aoi, aoi_cfg["date_1"], aoi_cfg["date_2"], aoi_name, data_dir=DATA_DIR
                 )
                 fused_1 = fuse(s1_1, s2_1, data_layout="HWC")
                 fused_2 = fuse(s1_2, s2_2, data_layout="HWC")
                 result = compare(
                     fused_1, fused_2,
                     metadata={
-                        "aoi": aoi_name, "date1": aoi["date_1"], "date2": aoi["date_2"],
+                        "aoi": aoi_name, "date1": aoi_cfg["date_1"], "date2": aoi_cfg["date_2"],
                         "pixel_size": 10.0,
                     },
                     config={"enable_direction_heuristics": True},

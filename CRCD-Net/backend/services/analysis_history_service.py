@@ -52,9 +52,11 @@ class AnalysisHistoryService:
     def _build_aoi(self, latitude: float, longitude: float, buffer_meters: float = 1000.0):
         try:
             import ee
+            import gee_data_collection as gdc
         except ImportError as exc:
             raise RuntimeError('earthengine-api is required for coordinate-based analysis runs') from exc
 
+        gdc.init()  # must run before constructing any ee.Geometry
         point = ee.Geometry.Point([float(longitude), float(latitude)])
         return point.buffer(buffer_meters).bounds()
 
