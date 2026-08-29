@@ -1,7 +1,13 @@
+import datetime
 import os
 import sys
 
 import streamlit as st
+
+# Sentinel-2 L2A products have a processing lag of a few days after
+# acquisition; anything more recent than this may not exist yet regardless
+# of how wide the search window is.
+MIN_DAYS_OLD = 10
 
 # dashboard.py lives in CRCD-Net/dashboard/ -- put CRCD-Net/ on sys.path so
 # handoff.py, fusion/, change_detection/ (siblings of dashboard/) import,
@@ -442,12 +448,21 @@ elif page == "Analysis":
         with lon_col:
             longitude = st.number_input("Longitude", value=78.4867, format="%.5f")
 
+        today = datetime.date.today()
+        latest_valid = today - datetime.timedelta(days=MIN_DAYS_OLD)
+        default_date2 = latest_valid.replace(year=latest_valid.year - 1)
+        default_date1 = latest_valid.replace(year=latest_valid.year - 5)
+
         st.subheader("Observation Dates")
+        st.caption(
+            f"Pick two dates at least {MIN_DAYS_OLD} days in the past -- "
+            "Sentinel-2 imagery isn't processed and available same-day."
+        )
         date1_col, date2_col = st.columns(2)
         with date1_col:
-            custom_date1 = st.date_input("Date 1")
+            custom_date1 = st.date_input("Date 1", value=default_date1, max_value=latest_valid)
         with date2_col:
-            custom_date2 = st.date_input("Date 2")
+            custom_date2 = st.date_input("Date 2", value=default_date2, max_value=latest_valid)
 
         aoi_name = f"custom_{latitude:.4f}_{longitude:.4f}".replace(".", "p").replace("-", "m")
         aoi_cfg = {"date_1": custom_date1.isoformat(), "date_2": custom_date2.isoformat()}
