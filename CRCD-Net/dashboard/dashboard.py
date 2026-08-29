@@ -21,6 +21,7 @@ from change_detection import compare
 from change_detection.visualization import generate_visualizations
 from fusion.baseline import fuse
 from handoff import get_training_pair
+from land_cover import get_land_cover_delta, label_from_delta, load_land_cover_delta
 
 # The 3 pre-exported demo AOIs -- no live GEE call needed, see DATA_CONTRACT.md.
 DEMO_AOIS = {
@@ -501,6 +502,23 @@ elif page == "Analysis":
                     },
                     config={"enable_direction_heuristics": True},
                 )
+                # Real, pretrained-model-backed built/trees signal (Dynamic World),
+                # separate from the generic pixel-difference detector above. Demo
+                # AOIs read it from cache (no extra GEE call); custom locations
+                # fetch it live, best-effort -- never let this break the main result.
+                land_cover_delta = load_land_cover_delta(aoi_name, data_dir=DATA_DIR)
+                if land_cover_delta is None and use_custom:
+                    try:
+                        land_cover_delta = get_land_cover_delta(
+                            ee_aoi, aoi_cfg["date_1"], aoi_cfg["date_2"], aoi_name, out_dir=DATA_DIR
+                        )
+                    except Exception:
+                        land_cover_delta = None
+                st.session_state["land_cover_delta"] = land_cover_delta
+                st.session_state["land_cover_label"] = (
+                    label_from_delta(land_cover_delta) if land_cover_delta else None
+                )
+
                 st.session_state["result"] = result
                 st.session_state["fused_1"] = fused_1
                 st.session_state["fused_2"] = fused_2
@@ -609,11 +627,32 @@ elif page == "Fusion & Results":
             direction = result.metadata.get("direction_heuristics", {})
             label = direction.get("label", "n/a") if isinstance(direction, dict) else "n/a"
             st.markdown(
-                '<div class="metric-card"><h4>Signal</h4>'
-                f'<p style="font-size:1.1rem; font-weight:700;">{label}</p></div>',
+                '<div class="metric-card"><h4>Generic Signal</h4>'
+                f'<p style="font-size:1.1rem; font-weight:700;">{label}</p></div>'
+                '<p style="font-size:0.75rem; color:#888;">pixel-difference magnitude heuristic</p>',
                 unsafe_allow_html=True
+            )
+
+        land_cover_delta = st.session_state.get("land_cover_delta")
+        land_cover_label = st.session_state.get("land_cover_label")
+        if land_cover_delta:
+            st.markdown(
+                '<div class="metric-card" style="margin-top:0.8rem;">'
+                '<h4>Pretrained-Model Signal (Dynamic World)</h4>'
+                f'<p style="font-size:1.1rem; font-weight:700;">{land_cover_label}</p>'
+                f'<p style="font-size:0.85rem;">built &Delta; {land_cover_delta["built_delta"]:+.4f}'
+                f' &nbsp;|&nbsp; trees &Delta; {land_cover_delta["trees_delta"]:+.4f}</p>'
+                '</div>',
+                unsafe_allow_html=True
+            )
+        else:
+            st.caption(
+                "No Dynamic World land-cover signal available for this run "
+                "(not cached, and no live fetch succeeded)."
             )
 
         st.markdown("---")
         with st.expander("Full statistics"):
             st.json(stats)
+            if land_cover_delta:
+                st.json(land_cover_delta)
