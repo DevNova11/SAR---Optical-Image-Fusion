@@ -12,6 +12,7 @@ from typing import Optional
 from change_detection import ChangeDetectionResult, compare
 from fusion.baseline import fuse
 from handoff import get_training_pair
+from land_cover import label_from_delta, load_land_cover_delta
 
 
 def run_pipeline(
@@ -36,6 +37,15 @@ def run_pipeline(
     fused_2 = fuse(s1_2, s2_2, method=fusion_method, data_layout="HWC")
 
     metadata = {"aoi": aoi_name, "date1": date_1, "date2": date_2, "pixel_size": pixel_size}
+
+    # Real, pretrained-model-backed built/trees signal (Dynamic World), if cached for
+    # this AOI/date pair -- see land_cover.py. Falls back cleanly if not cached yet;
+    # the base pipeline never depends on this being present.
+    land_cover_delta = load_land_cover_delta(aoi_name, data_dir=data_dir)
+    if land_cover_delta is not None:
+        metadata["land_cover_delta"] = land_cover_delta
+        metadata["land_cover_label"] = label_from_delta(land_cover_delta)
+
     return compare(fused_1, fused_2, metadata=metadata)
 
 
