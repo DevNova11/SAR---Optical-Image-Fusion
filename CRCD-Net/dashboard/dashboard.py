@@ -1,4 +1,36 @@
+import os
+import sys
+
 import streamlit as st
+
+# dashboard.py lives in CRCD-Net/dashboard/ -- put CRCD-Net/ on sys.path so
+# handoff.py, fusion/, change_detection/ (siblings of dashboard/) import,
+# and resolve data/ absolutely since Streamlit's cwd depends on how/where
+# it was launched, not on this file's location.
+CRCD_NET_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, CRCD_NET_ROOT)
+DATA_DIR = os.path.join(CRCD_NET_ROOT, "data")
+
+from change_detection import compare
+from change_detection.visualization import generate_visualizations
+from fusion.baseline import fuse
+from handoff import get_training_pair
+
+# The 3 pre-exported demo AOIs -- no live GEE call needed, see DATA_CONTRACT.md.
+DEMO_AOIS = {
+    "bengaluru_sarjapur (urbanization)": {
+        "date_1": "2019-02-01", "date_2": "2024-02-01",
+        "latitude": 12.845, "longitude": 77.645,
+    },
+    "chennai_oragadam (industrial expansion)": {
+        "date_1": "2018-02-25", "date_2": "2023-02-14",
+        "latitude": 12.770, "longitude": 80.000,
+    },
+    "chimakurthy_quarry (deforestation/mining)": {
+        "date_1": "2018-02-03", "date_2": "2023-01-28",
+        "latitude": 15.550, "longitude": 79.850,
+    },
+}
 
 # --------------------------------------------------
 # PAGE CONFIGURATION
@@ -373,38 +405,23 @@ elif page == "Analysis":
     )
 
     st.write(
-        "Select the area and dates for satellite analysis."
+        "Pick one of the pre-exported demo areas -- these run instantly, "
+        "no live satellite data pull needed."
     )
 
-    st.subheader("Location Coordinates")
+    st.subheader("Demo Area")
 
-    lat_col, lon_col = st.columns(2)
-
-    with lat_col:
-        latitude = st.number_input(
-            "Latitude",
-            value=17.3850
-        )
-
-    with lon_col:
-        longitude = st.number_input(
-            "Longitude",
-            value=78.4867
-        )
+    aoi_label = st.selectbox("Area of interest", list(DEMO_AOIS.keys()))
+    aoi_name = aoi_label.split(" (")[0]
+    aoi = DEMO_AOIS[aoi_label]
 
     st.subheader("Observation Dates")
 
     date1_col, date2_col = st.columns(2)
-
     with date1_col:
-        date1 = st.date_input(
-            "Date 1"
-        )
-
+        st.text_input("Date 1", value=aoi["date_1"], disabled=True)
     with date2_col:
-        date2 = st.date_input(
-            "Date 2"
-        )
+        st.text_input("Date 2", value=aoi["date_2"], disabled=True)
 
     st.markdown("---")
 
@@ -412,18 +429,31 @@ elif page == "Analysis":
         "Start Analysis",
         use_container_width=True
     ):
-
-        st.success(
-            "Analysis request created successfully!"
-        )
-
-        st.write(
-            f"Location: {latitude}, {longitude}"
-        )
-
-        st.write(
-            f"Dates: {date1} -> {date2}"
-        )
+        with st.spinner("Running data -> fusion -> change detection pipeline..."):
+            try:
+                s1_1, s2_1, s1_2, s2_2 = get_training_pair(
+                    None, aoi["date_1"], aoi["date_2"], aoi_name, data_dir=DATA_DIR
+                )
+                fused_1 = fuse(s1_1, s2_1, data_layout="HWC")
+                fused_2 = fuse(s1_2, s2_2, data_layout="HWC")
+                result = compare(
+                    fused_1, fused_2,
+                    metadata={
+                        "aoi": aoi_name, "date1": aoi["date_1"], "date2": aoi["date_2"],
+                        "pixel_size": 10.0,
+                    },
+                    config={"enable_direction_heuristics": True},
+                )
+                st.session_state["result"] = result
+                st.session_state["fused_1"] = fused_1
+                st.session_state["fused_2"] = fused_2
+                st.session_state["aoi_name"] = aoi_name
+                st.success(
+                    f"Analysis complete for {aoi_name}. "
+                    "See the Fusion & Results page."
+                )
+            except Exception as exc:
+                st.error(f"Analysis failed: {exc}")
 
 
 # ==================================================
@@ -438,79 +468,95 @@ elif page == "Fusion & Results":
         unsafe_allow_html=True
     )
 
-    st.write(
-        """
-        This module will connect to the Person 2
-        fusion implementation.
-        """
-    )
+    result = st.session_state.get("result")
+    fused_1 = st.session_state.get("fused_1")
+    fused_2 = st.session_state.get("fused_2")
+    aoi_name = st.session_state.get("aoi_name")
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.subheader("SAR")
-        st.markdown(
-            '<div class="placeholder-box">Sentinel-1 input</div>',
-            unsafe_allow_html=True
-        )
-
-    with col2:
-        st.subheader("Optical")
-        st.markdown(
-            '<div class="placeholder-box">Sentinel-2 input</div>',
-            unsafe_allow_html=True
-        )
-
-    with col3:
-        st.subheader("Fused")
-        st.markdown(
-            '<div class="placeholder-box">CRCD-Net fused output</div>',
-            unsafe_allow_html=True
-        )
-
-    st.markdown(
-        '<div class="section-title">Analysis Results</div>'
-        '<div class="section-underline"></div>',
-        unsafe_allow_html=True
-    )
-
-    rcol1, rcol2, rcol3 = st.columns(3)
-
-    with rcol1:
-        st.markdown(
+    if result is None:
+        st.write(
             """
-            <div class="metric-card">
-            <h4>Changed Area</h4>
-            <p style="font-size:1.5rem; font-weight:700;">-</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with rcol2:
-        st.markdown(
+            Go to the Analysis page, pick a demo area, and click
+            Start Analysis -- results will appear here.
             """
-            <div class="metric-card">
-            <h4>Change Percentage</h4>
-            <p style="font-size:1.5rem; font-weight:700;">-</p>
-            </div>
-            """,
-            unsafe_allow_html=True
         )
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.subheader("SAR")
+            st.markdown('<div class="placeholder-box">Sentinel-1 input</div>', unsafe_allow_html=True)
+        with col2:
+            st.subheader("Optical")
+            st.markdown('<div class="placeholder-box">Sentinel-2 input</div>', unsafe_allow_html=True)
+        with col3:
+            st.subheader("Fused")
+            st.markdown('<div class="placeholder-box">CRCD-Net fused output</div>', unsafe_allow_html=True)
 
-    with rcol3:
         st.markdown(
-            """
-            <div class="metric-card">
-            <h4>Confidence</h4>
-            <p style="font-size:1.5rem; font-weight:700;">-</p>
-            </div>
-            """,
+            '<div class="section-title">Analysis Results</div>'
+            '<div class="section-underline"></div>',
+            unsafe_allow_html=True
+        )
+        rcol1, rcol2, rcol3 = st.columns(3)
+        for col, label in zip((rcol1, rcol2, rcol3), ("Changed Area", "Change Percentage", "Confidence")):
+            with col:
+                st.markdown(
+                    f'<div class="metric-card"><h4>{label}</h4>'
+                    '<p style="font-size:1.5rem; font-weight:700;">-</p></div>',
+                    unsafe_allow_html=True
+                )
+        st.markdown("---")
+        st.info("Run an analysis to display change detection results.")
+
+    else:
+        st.write(f"Results for **{aoi_name}**")
+
+        viz_dir = os.path.join(CRCD_NET_ROOT, "outputs", "dashboard_last_run")
+        paths = generate_visualizations(
+            fused_1, fused_2, result.difference_map, result.change_map, output_dir=viz_dir
+        )
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.subheader("Fused - Date 1")
+            st.image(paths["date1"])
+        with col2:
+            st.subheader("Fused - Date 2")
+            st.image(paths["date2"])
+        with col3:
+            st.subheader("Change Map")
+            st.image(paths["change_map"])
+
+        st.image(paths["difference"], caption="Difference map (continuous)")
+
+        st.markdown(
+            '<div class="section-title">Analysis Results</div>'
+            '<div class="section-underline"></div>',
             unsafe_allow_html=True
         )
 
-    st.markdown("---")
+        stats = result.statistics
+        rcol1, rcol2, rcol3 = st.columns(3)
+        with rcol1:
+            st.markdown(
+                '<div class="metric-card"><h4>Changed Area</h4>'
+                f'<p style="font-size:1.5rem; font-weight:700;">{stats.get("changed_area_km2", "-")} km&sup2;</p></div>',
+                unsafe_allow_html=True
+            )
+        with rcol2:
+            st.markdown(
+                '<div class="metric-card"><h4>Change Percentage</h4>'
+                f'<p style="font-size:1.5rem; font-weight:700;">{stats.get("change_percentage", "-")}%</p></div>',
+                unsafe_allow_html=True
+            )
+        with rcol3:
+            direction = result.metadata.get("direction_heuristics", {})
+            label = direction.get("label", "n/a") if isinstance(direction, dict) else "n/a"
+            st.markdown(
+                '<div class="metric-card"><h4>Signal</h4>'
+                f'<p style="font-size:1.1rem; font-weight:700;">{label}</p></div>',
+                unsafe_allow_html=True
+            )
 
-    st.info(
-        "Run an analysis to display change detection results."
-    )
+        st.markdown("---")
+        with st.expander("Full statistics"):
+            st.json(stats)
