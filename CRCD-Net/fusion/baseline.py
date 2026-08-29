@@ -8,6 +8,8 @@ Robust against differing channel counts, NaN/Inf values, and shape variations.
 from typing import Optional, Tuple, Union
 import numpy as np
 
+NODATA = -9999.0  # sentinel for masked/no-observation pixels, per CRCD-Net/DATA_CONTRACT.md #2
+
 
 def validate_and_format_inputs(
     s1_image: np.ndarray,
@@ -76,9 +78,10 @@ def validate_and_format_inputs(
 
 
 def _sanitize_array(arr: np.ndarray, name: str) -> np.ndarray:
-    """Replaces NaNs with zero and clips infinite values to min/max finite values."""
-    if np.isnan(arr).any():
-        arr = np.nan_to_num(arr, nan=0.0)
+    """Replaces NaNs and the NODATA sentinel with zero, and clips infinite values to min/max finite values."""
+    invalid = np.isnan(arr) | (arr == NODATA)
+    if invalid.any():
+        arr = np.where(invalid, 0.0, arr)
 
     if np.isinf(arr).any():
         finite_vals = arr[np.isfinite(arr)]

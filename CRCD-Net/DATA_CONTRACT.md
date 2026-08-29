@@ -90,10 +90,15 @@ authenticated — see `gee_data_collection.py`).
 
 ## 6. Demo AOIs (pre-exported, checked into `data/`)
 
-All three validated end-to-end (`validate_export.py` passes, 0% nodata,
+All three validated end-to-end (`validate_export.py` passes, near-zero
+nodata — under 0.04% on every file, well under the 60% threshold —
 plausible band stats) via the real pipeline against live GEE data — not
 synthetic. Two show urbanization, one shows deforestation/land-clearing, so
 the demo can tell either story.
+
+Near-zero is not exactly zero: every consumer of these arrays (e.g. any
+`fuse()` implementation) must still mask on `NODATA = -9999.0` before doing
+math on them — see §2. `fusion/baseline.py`'s `fuse()` does this internally.
 
 | `aoi_name`           | date_1       | date_2       | Grid      | Story |
 |-----------------------|--------------|--------------|-----------|-------|
