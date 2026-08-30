@@ -1,11 +1,44 @@
-Flask>=3.0.0
-python-dotenv>=1.0.0
-requests>=2.31.0
-numpy>=1.26.0
-pandas>=2.2.0
-matplotlib>=3.8.0
-scikit-learn>=1.4.0
-scikit-image>=0.22.0
-scipy>=1.12.0
-Pillow>=10.0.0
-streamlit>=1.38.0
+# Pinned to versions this app is actually tested against locally.
+# Streamlit Community Cloud installs from this file -- keep it complete and
+# pinned; an unpinned or incomplete list is the most common cause of a
+# broken deploy.
+
+# --- Streamlit app (dashboard/) ---
+streamlit==1.62.0
+folium==0.17.0
+streamlit-folium==0.23.1
+pyproj==3.7.2
+
+# --- Earth Engine data acquisition (gee_data_collection.py) ---
+# Imported at module load even on the pure cached-demo path (local_preprocessing.py
+# re-exports gee_data_collection.suggest_best_dates), so these are required even
+# for viewers who never trigger a live GEE pull.
+earthengine-api==1.7.40
+geemap==0.38.3
+rasterio==1.5.1
+
+# --- Core numerical / imaging stack ---
+numpy==2.5.2
+pandas==3.0.5
+matplotlib==3.11.1
+scikit-learn==1.9.0
+scikit-image==0.26.0
+scipy==1.18.1
+Pillow==12.3.0
+
+# --- Backend API (app.py / backend/) -- not used by the Streamlit deploy,
+# kept so the Flask service in this repo still installs from the same file.
+Flask==3.1.3
+python-dotenv==1.2.3
+requests==2.34.2
+
+# --- Deliberately NOT included: torch ---
+# fusion/deep_model.py (the optional PyTorch fusion model) is never called
+# by any path the deployed dashboard actually reaches -- run_provenance_pipeline.py
+# and evaluation/benchmark_suite.py both call fuse()/fuse_reliability_aware()
+# with model=None (pure numpy/scipy). fusion/__init__.py lazy-imports torch
+# only if something explicitly asks for fuse_deep/CRCDNet/train_fusion_model,
+# so `import fusion` and the whole dashboard work with torch absent. Skipping
+# it avoids ~1-2GB of install weight and RAM the ~1GB Community Cloud instance
+# doesn't have to spare. Install it yourself locally only if you're working on
+# fusion/deep_model.py directly.

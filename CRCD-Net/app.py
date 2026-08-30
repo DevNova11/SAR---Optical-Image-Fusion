@@ -9,10 +9,10 @@ app.register_blueprint(api)
 @app.route('/')
 def index():
     # This Flask app is the API only -- the actual UI is the Streamlit
-    # dashboard (CRCD-Net/dashboard/dashboard.py), not a page served here.
+    # dashboard (CRCD-Net/dashboard/Home.py), not a page served here.
     return jsonify({
         'service': 'CRCD-Net backend API',
-        'ui': 'Run the Streamlit dashboard separately: cd dashboard && streamlit run dashboard.py',
+        'ui': 'Run the Streamlit dashboard separately: streamlit run dashboard/Home.py',
         'endpoints': ['/api/health', '/api/analysis', '/api/analysis/<id>', '/api/analysis/history'],
     })
 

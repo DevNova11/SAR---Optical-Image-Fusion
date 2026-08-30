@@ -1,0 +1,21 @@
+# Streamlit run/UI config. The app sets its own dark theme via CSS
+# (dashboard/common.py), but the [theme] block below still matters: it's
+# what Streamlit's own chrome (the header bar, default widget colors)
+# renders as before that CSS loads, so it avoids a light-mode flash.
+
+[theme]
+base = "dark"
+primaryColor = "#7fffa0"
+backgroundColor = "#0a0c0a"
+secondaryBackgroundColor = "#12160f"
+textColor = "#eaf2e6"
+font = "sans serif"
+
+[server]
+# Community Cloud sets its own port/address; this only matters for local
+# `streamlit run`, and headless=true avoids it trying to auto-open a browser
+# tab in environments where that fails silently anyway.
+headless = true
+
+[browser]
+gatherUsageStats = false

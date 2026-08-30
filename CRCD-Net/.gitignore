@@ -6,3 +6,8 @@ __pycache__/
 .venv/
 instance/
 outputs/
+
+# Real secrets only -- never commit a filled-in secrets.toml. The .example
+# template (placeholder values, safe to commit) is intentionally not
+# excluded by this pattern.
+.streamlit/secrets.toml

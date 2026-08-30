@@ -5,13 +5,22 @@ Pulls cloud-masked Sentinel-2 (B2,B3,B4,B8) and speckle-filtered Sentinel-1
 each as a GeoTIFF. See DATA_CONTRACT.md for the exact band order/dtype this
 guarantees downstream.
 
-Requires an already-authenticated `earthengine-api` session:
-    ee.Authenticate()   # interactive, run once yourself — never automate this
-This module only ever calls `ee.Initialize()`, never `ee.Authenticate()`.
+Two supported auth paths, both handled by init() below -- this module still
+never calls ee.Authenticate() itself:
+
+  1. Local development: an already-authenticated `earthengine-api` session
+     via `ee.Authenticate()` (interactive, run once yourself), which caches
+     a credential ee.Initialize() picks up with no extra step.
+  2. Headless/hosted (e.g. Streamlit Community Cloud): a GEE service-account
+     key stored in Streamlit secrets (st.secrets["gee_service_account"]),
+     never on disk. init() prefers this path when it's present, and falls
+     back to the interactive-credential path otherwise -- so the same code
+     works unchanged on a laptop and on a server with no browser.
 """
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 import os
 
@@ -20,6 +29,28 @@ import geemap
 import rasterio
 
 EE_PROJECT = "autonomous-star-504310-c1"
+
+
+def _service_account_info_from_secrets() -> dict | None:
+    """The GEE service-account key dict from Streamlit secrets, or None.
+
+    Deliberately soft-fails (returns None) rather than raising: this module
+    is also used outside Streamlit (run_pipeline.py, tests, scripts), where
+    `streamlit` may not even be installed, and where falling through to the
+    interactive-credential path below is the correct behavior anyway.
+    """
+    try:
+        import streamlit as st
+    except ImportError:
+        return None
+    try:
+        if "gee_service_account" not in st.secrets:
+            return None
+        return dict(st.secrets["gee_service_account"])
+    except Exception:
+        # No secrets.toml at all (e.g. local run without one configured)
+        # raises rather than just missing a key -- same fallback either way.
+        return None
 
 S2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 S2_CLOUD_COLLECTION = "COPERNICUS/S2_CLOUD_PROBABILITY"
@@ -34,14 +65,38 @@ DEFAULT_WINDOW_DAYS = 45  # composite window on each side of a single requested 
 
 
 def init():
-    """Initialize EE against the cached credential. Never calls ee.Authenticate()."""
+    """Initialize EE. Never calls ee.Authenticate().
+
+    Prefers a service-account key from Streamlit secrets (headless/hosted
+    path); falls back to the interactive-auth cached credential (local dev
+    path) when no service account is configured.
+    """
+    service_account_info = _service_account_info_from_secrets()
+    if service_account_info is not None:
+        try:
+            credentials = ee.ServiceAccountCredentials(
+                service_account_info["client_email"],
+                key_data=json.dumps(service_account_info),
+            )
+            ee.Initialize(credentials, project=service_account_info.get("project_id", EE_PROJECT))
+            return
+        except Exception as exc:
+            raise RuntimeError(
+                "ee.Initialize() with the service account from "
+                "st.secrets['gee_service_account'] failed -- check the key is "
+                "a valid GEE-enabled service account and every field from the "
+                "downloaded JSON was copied into secrets.toml."
+            ) from exc
+
     try:
         ee.Initialize(project=EE_PROJECT)
     except Exception as exc:
         raise RuntimeError(
-            "ee.Initialize() failed — no cached credential found. Run "
-            "`ee.Authenticate()` interactively yourself (this module will not "
-            "do it for you), then retry."
+            "ee.Initialize() failed — no cached credential found and no "
+            "st.secrets['gee_service_account'] is configured. For local dev, "
+            "run `ee.Authenticate()` interactively yourself (this module will "
+            "not do it for you); for a hosted deploy, add a GEE service "
+            "account key to Streamlit secrets."
         ) from exc
 
 
