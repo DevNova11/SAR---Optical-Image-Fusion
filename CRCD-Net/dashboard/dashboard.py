@@ -449,6 +449,28 @@ elif page == "Change Provenance & Early Warning":
                     aoi_name, dates=dates_list, aoi_geometry=aoi_geometry, data_dir=DATA_DIR
                 )
                 st.session_state[f"prov_result_{aoi_name}"] = prov_res
+                st.session_state[f"dates_{aoi_name}"] = dates_list
+
+                # Also run the ablation/benchmark suite for this same AOI + dates,
+                # so the Research Evaluation page has results ready without a
+                # second manual run. Safe to run now even for a fresh custom
+                # location: by this point run_provenance_pipeline has already
+                # fetched (and cached) all the imagery this needs.
+                with st.spinner(f"Also running the 7-stage ablation study for {aoi_name}..."):
+                    try:
+                        bench_suite = BenchmarkSuite(data_dir=DATA_DIR)
+                        st.session_state[f"bench_{aoi_name}"] = bench_suite.run_benchmark(
+                            aoi_name, dates=dates_list
+                        )
+                    except Exception as exc:
+                        # Never let a benchmark failure hide the (successful)
+                        # provenance result above -- just surface it and move on.
+                        st.session_state[f"bench_{aoi_name}_error"] = str(exc)
+
+                if use_custom:
+                    known = st.session_state.setdefault("custom_aoi_history", [])
+                    if aoi_name not in known:
+                        known.append(aoi_name)
         else:
             prov_res = st.session_state[f"prov_result_{aoi_name}"]
 
@@ -817,13 +839,33 @@ elif page == "Research Evaluation & Ablation Suite":
     st.markdown('<div class="section-title">Research Evaluation & 7-Stage Ablation Suite</div><div class="section-underline"></div>', unsafe_allow_html=True)
     st.caption("Quantitative benchmarking comparing Baselines against the proposed Multi-Temporal Provenance System.")
 
-    aoi_label = st.selectbox("Benchmark Target Area", list(DEMO_AOIS.keys()), index=0)
+    # Custom locations you've already run on the Change Provenance page show up
+    # here too -- ablation for them was already kicked off automatically then.
+    custom_options = st.session_state.get("custom_aoi_history", [])
+    bench_options = list(DEMO_AOIS.keys()) + custom_options
+    aoi_label = st.selectbox("Benchmark Target Area", bench_options, index=0)
     aoi_name = aoi_label.split(" (")[0]
+
+    if custom_options:
+        st.caption(
+            f"Custom locations available here (already run via Change Provenance & Early Warning): "
+            f"{', '.join(custom_options)}"
+        )
+
+    if f"bench_{aoi_name}_error" in st.session_state:
+        st.error(
+            f"The linked ablation run for {aoi_name} failed: "
+            f"{st.session_state[f'bench_{aoi_name}_error']}. You can retry manually below."
+        )
 
     if st.button("Execute Quantitative Benchmark & Ablation Study", use_container_width=True):
         with st.spinner(f"Running benchmarks and 7 ablation stages for {aoi_name}..."):
             suite = BenchmarkSuite(data_dir=DATA_DIR)
-            bench_res = suite.run_benchmark(aoi_name)
+            # Custom AOIs have no entry in get_default_temporal_dates()'s presets --
+            # reuse the exact dates that AOI was originally run with, if we have them
+            # (set when it was run from the Change Provenance page).
+            known_dates = st.session_state.get(f"dates_{aoi_name}")
+            bench_res = suite.run_benchmark(aoi_name, dates=known_dates)
             st.session_state[f"bench_{aoi_name}"] = bench_res
 
     if f"bench_{aoi_name}" in st.session_state:
