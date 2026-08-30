@@ -74,7 +74,7 @@ DEMO_AOIS = {
 # --------------------------------------------------
 st.set_page_config(
     page_title="CRCD-Net | Change Provenance Console",
-    page_icon="🛰️",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -223,11 +223,15 @@ st.markdown(
     }
 
     /* Radio button selection dots: Streamlit's default red accent
-       (rgb(255,75,75)) lives on the div 3 levels deep inside the selected
-       label -- e.g. label[data-selected="true"] > div > div > div.
-       Confirmed via computed style inspection; emotion class names are
-       unstable across versions so this targets by DOM depth instead. */
-    [data-testid="stRadio"] label[data-selected="true"] div > div > div {
+       (rgb(255,75,75)) lives on the dot div, which sits at the same DOM
+       depth (2 div-ancestors deep) as the sibling div that wraps the
+       option's *label text* -- both match a plain "div > div > div"
+       selector, which is what turned the whole "Home" label green
+       instead of just the dot. The text wrapper always carries
+       data-testid="stMarkdownContainer"; the dot never does, so
+       excluding that testid is what actually disambiguates them.
+       Confirmed via computed-style + bounding-rect inspection. */
+    [data-testid="stRadio"] label[data-selected="true"] div > div > div:not([data-testid]) {
         background-color: var(--phosphor) !important;
     }
     [data-testid="stRadio"] svg { fill: var(--phosphor) !important; }
@@ -244,7 +248,7 @@ st.markdown(
 # SIDEBAR NAVIGATION
 # --------------------------------------------------
 with st.sidebar:
-    st.title("🛰️ CRCD-Net")
+    st.title("CRCD-Net")
     st.caption("Explainable SAR–Optical Provenance Console")
     st.markdown("---")
 
@@ -360,27 +364,90 @@ if page == "Home":
 elif page == "Change Provenance & Early Warning":
     st.markdown('<div class="section-title">Multi-Temporal Change Provenance & Early Warning Console</div><div class="section-underline"></div>', unsafe_allow_html=True)
 
-    # Configuration controls
-    col_aoi, col_dates = st.columns([1.5, 2.5])
-    with col_aoi:
-        aoi_label = st.selectbox("Select Target Area of Interest (AOI)", list(DEMO_AOIS.keys()), index=0)
-        aoi_name = aoi_label.split(" (")[0]
-        aoi_info = DEMO_AOIS[aoi_label]
-        st.caption(f"ℹ️ **Location Context**: {aoi_info['story']}")
+    # Area source: pre-cached demo AOI (instant, no GEE needed) or a
+    # custom location (live GEE pull for up to 4 dates).
+    area_source = st.radio(
+        "Area Source", ["Demo Area", "Custom Location"], horizontal=True
+    )
+    use_custom = area_source == "Custom Location"
+    aoi_geometry = None
 
-    with col_dates:
-        dates_list = aoi_info["dates"]
-        st.write(f"**Multi-Temporal Timeline ({len(dates_list)} Observations)**:")
-        st.code(" ➔ ".join([f"T{i+1}: {d}" for i, d in enumerate(dates_list)]))
+    if not use_custom:
+        col_aoi, col_dates = st.columns([1.5, 2.5])
+        with col_aoi:
+            aoi_label = st.selectbox("Select Target Area of Interest (AOI)", list(DEMO_AOIS.keys()), index=0)
+            aoi_name = aoi_label.split(" (")[0]
+            aoi_info = DEMO_AOIS[aoi_label]
+            st.caption(f"**Location Context**: {aoi_info['story']}")
+
+        with col_dates:
+            dates_list = aoi_info["dates"]
+            st.write(f"**Multi-Temporal Timeline ({len(dates_list)} Observations)**:")
+            st.code(" -> ".join([f"T{i+1}: {d}" for i, d in enumerate(dates_list)]))
+    else:
+        st.warning(
+            "Custom locations pull live satellite data for up to 4 dates -- this can take "
+            "1-3 minutes and sometimes fails on a flaky connection. The demo areas above are "
+            "the reliable, instant path."
+        )
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            custom_lat = st.number_input("Latitude", value=17.3850, format="%.5f")
+        with cc2:
+            custom_lon = st.number_input("Longitude", value=78.4867, format="%.5f")
+
+        today = datetime.date.today()
+        latest_valid = today - datetime.timedelta(days=MIN_DAYS_OLD)
+        default_end = latest_valid.replace(year=latest_valid.year - 1)
+        default_start = latest_valid.replace(year=latest_valid.year - 5)
+
+        dc1, dc2 = st.columns(2)
+        with dc1:
+            custom_start = st.date_input("Start Date (T1)", value=default_start, max_value=latest_valid)
+        with dc2:
+            custom_end = st.date_input("End Date (T-final)", value=default_end, max_value=latest_valid)
+
+        if custom_start >= custom_end:
+            st.error("Start date must be before end date.")
+            dates_list = []
+        else:
+            # Evenly space 2 middle observations between the anchors, same
+            # shape as the demo AOIs' 4-date timelines.
+            span_days = (custom_end - custom_start).days
+            mid1 = custom_start + datetime.timedelta(days=round(span_days / 3))
+            mid2 = custom_start + datetime.timedelta(days=round(2 * span_days / 3))
+            dates_list = [
+                custom_start.isoformat(), mid1.isoformat(), mid2.isoformat(), custom_end.isoformat(),
+            ]
+            st.write(f"**Multi-Temporal Timeline ({len(dates_list)} Observations)**:")
+            st.code(" -> ".join([f"T{i+1}: {d}" for i, d in enumerate(dates_list)]))
+
+        aoi_name = f"custom_{custom_lat:.4f}_{custom_lon:.4f}".replace(".", "p").replace("-", "m")
 
     run_col1, run_col2 = st.columns([1, 3])
     with run_col1:
-        run_btn = st.button("🚀 Run Full Provenance Pipeline", use_container_width=True)
+        run_btn = st.button(
+            "Run Full Provenance Pipeline", use_container_width=True,
+            disabled=use_custom and not dates_list,
+        )
 
     if run_btn or f"prov_result_{aoi_name}" in st.session_state:
         if run_btn:
-            with st.spinner(f"Running multi-temporal fusion, semantic classification, persistence verification, and hotspot priority ranking for {aoi_name}..."):
-                prov_res = run_provenance_pipeline(aoi_name, dates=dates_list, data_dir=DATA_DIR)
+            if use_custom:
+                import ee
+                import gee_data_collection as gdc
+                gdc.init()  # must run before constructing any ee.Geometry
+                aoi_geometry = ee.Geometry.Point([custom_lon, custom_lat]).buffer(1000).bounds()
+
+            spinner_msg = (
+                f"Pulling live satellite data and running the full provenance pipeline for {aoi_name}..."
+                if use_custom else
+                f"Running multi-temporal fusion, semantic classification, persistence verification, and hotspot priority ranking for {aoi_name}..."
+            )
+            with st.spinner(spinner_msg):
+                prov_res = run_provenance_pipeline(
+                    aoi_name, dates=dates_list, aoi_geometry=aoi_geometry, data_dir=DATA_DIR
+                )
                 st.session_state[f"prov_result_{aoi_name}"] = prov_res
         else:
             prov_res = st.session_state[f"prov_result_{aoi_name}"]
@@ -393,7 +460,7 @@ elif page == "Change Provenance & Early Warning":
         interpolated_dates = set(prov_res.metrics.get("interpolated_observation_dates", []))
         if interpolated_dates:
             st.warning(
-                f"⚠️ {len(interpolated_dates)} of {prov_res.metrics['total_observations']} "
+                f"Note: {len(interpolated_dates)} of {prov_res.metrics['total_observations']} "
                 f"observation dates below are **interpolated, not real satellite data** "
                 f"(sigmoidal blend between the real anchor dates -- no cached or live GEE "
                 f"pull exists for them): **{', '.join(sorted(interpolated_dates))}**. "
@@ -419,10 +486,10 @@ elif page == "Change Provenance & Early Warning":
 
         # Tabbed Visualizers
         t_tab1, t_tab2, t_tab3, t_tab4 = st.tabs([
-            "🛰️ Temporal Observation Viewer",
-            "🗺️ Provenance & Semantic Maps",
-            "📋 Prioritized Hotspot Table",
-            "🔍 Hotspot Deep Drill-Down",
+            "Temporal Observation Viewer",
+            "Provenance & Semantic Maps",
+            "Prioritized Hotspot Table",
+            "Hotspot Deep Drill-Down",
         ])
 
         # TAB 1: Temporal Satellite & Fused Viewer
@@ -440,7 +507,7 @@ elif page == "Change Provenance & Early Warning":
 
             if obs.is_interpolated:
                 st.error(
-                    f"⚠️ {obs.date} is an **interpolated** timestep, not a real satellite "
+                    f"{obs.date} is an **interpolated** timestep, not a real satellite "
                     f"observation -- the images below are a synthetic blend between the real "
                     f"anchor dates, not actual Sentinel-1/2 imagery."
                 )
@@ -481,7 +548,19 @@ elif page == "Change Provenance & Early Warning":
         # TAB 2: Maps Explorer
         with t_tab2:
             st.subheader("Geospatial Provenance Analysis Maps")
-            
+
+            st.write("**Fused Representation Across All Observations**")
+            fused_cols = st.columns(len(prov_res.dates))
+            for idx, d in enumerate(prov_res.dates):
+                with fused_cols[idx]:
+                    caption = f"T{idx+1}: {d}" + (" (interpolated)" if d in interpolated_dates else "")
+                    st.image(
+                        np.clip(prov_res.fused_series[idx][..., :3], 0.0, 1.0),
+                        clamp=True, caption=caption, use_container_width=True,
+                    )
+
+            st.markdown("---")
+
             map_row1_c1, map_row1_c2, map_row1_c3 = st.columns(3)
             with map_row1_c1:
                 st.write(f"**Initial Land-Cover ({prov_res.dates[0]})**")
@@ -532,7 +611,7 @@ elif page == "Change Provenance & Early Warning":
 
                 if interpolated_dates:
                     st.caption(
-                        "⚠️ See the 'First Detected Real?' column -- 'No (interpolated)' means "
+                        "See the 'First Detected Real?' column -- 'No (interpolated)' means "
                         "that timestamp is a synthetic estimate, not an actual observation date."
                     )
 
@@ -565,7 +644,7 @@ elif page == "Change Provenance & Early Warning":
                 with d_col1:
                     csv_data = display_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        "📥 Download Hotspot Table (CSV)",
+                        "Download Hotspot Table (CSV)",
                         csv_data,
                         file_name=f"{aoi_name}_hotspots.csv",
                         mime="text/csv",
@@ -574,7 +653,7 @@ elif page == "Change Provenance & Early Warning":
                 with d_col2:
                     json_str = json.dumps(prov_res.export_summary_json(), indent=2)
                     st.download_button(
-                        "📥 Download Machine-Readable Provenance Report (JSON)",
+                        "Download Machine-Readable Provenance Report (JSON)",
                         json_str,
                         file_name=f"{aoi_name}_provenance_report.json",
                         mime="application/json",
@@ -741,7 +820,7 @@ elif page == "Research Evaluation & Ablation Suite":
     aoi_label = st.selectbox("Benchmark Target Area", list(DEMO_AOIS.keys()), index=0)
     aoi_name = aoi_label.split(" (")[0]
 
-    if st.button("📊 Execute Quantitative Benchmark & Ablation Study", use_container_width=True):
+    if st.button("Execute Quantitative Benchmark & Ablation Study", use_container_width=True):
         with st.spinner(f"Running benchmarks and 7 ablation stages for {aoi_name}..."):
             suite = BenchmarkSuite(data_dir=DATA_DIR)
             bench_res = suite.run_benchmark(aoi_name)
@@ -790,14 +869,38 @@ elif page == "Research Evaluation & Ablation Suite":
         st.dataframe(comp_df, use_container_width=True)
 
         st.markdown("### 2. 7-Stage Component Ablation Analysis")
-        ablation_rows = []
+        st.caption(
+            "Each stage adds one capability on top of the previous stage, so you can see "
+            "exactly what each piece of the system contributes on its own."
+        )
+
+        def _format_metric_label(key: str) -> str:
+            return key.replace("_", " ").title()
+
+        def _format_metric_value(key: str, value) -> str:
+            if isinstance(value, bool):
+                return "Yes" if value else "No"
+            if isinstance(value, float):
+                if "percentage" in key or "weight" in key:
+                    return f"{value:.2f}%" if "percentage" in key else f"{value:.2f}"
+                return f"{value:.3f}"
+            if isinstance(value, list):
+                return ", ".join(str(v) for v in value)
+            return str(value)
+
         for stage_key, stage_info in bench_res.ablation_results.items():
-            ablation_rows.append({
-                "Ablation Stage": stage_key.replace("_", " "),
-                "Description": stage_info.get("description"),
-                "Key Contribution": ", ".join([f"{k}: {v}" for k, v in stage_info.items() if k != "description"])
-            })
-        st.dataframe(pd.DataFrame(ablation_rows), use_container_width=True)
+            stage_title = stage_key.replace("_", " ")
+            description = stage_info.get("description", "")
+            with st.expander(f"{stage_title} -- {description}", expanded=False):
+                metrics_items = [(k, v) for k, v in stage_info.items() if k != "description"]
+                mcols = st.columns(min(3, max(1, len(metrics_items))))
+                for idx, (k, v) in enumerate(metrics_items):
+                    with mcols[idx % len(mcols)]:
+                        st.markdown(
+                            f'<div class="metric-card"><h4>{_format_metric_label(k)}</h4>'
+                            f'<p style="font-size:1.1rem;">{_format_metric_value(k, v)}</p></div>',
+                            unsafe_allow_html=True,
+                        )
 
         st.markdown("### 3. Key Scientific Findings")
         insights = bench_res.comparative_summary
