@@ -141,6 +141,35 @@ def _export_geotiff(image: "ee.Image", aoi: "ee.Geometry", crs: str, scale: int,
     return out_path
 
 
+def collect_date(
+    aoi: "ee.Geometry",
+    date: str,
+    aoi_name: str,
+    out_dir: str = "data",
+    crs: str | None = None,
+    scale: int = DEFAULT_SCALE,
+    window_days: int = DEFAULT_WINDOW_DAYS,
+) -> dict:
+    """Pull S1+S2 for a single date over one AOI, export 2 GeoTIFFs, return their paths.
+
+    Returns {'s1': path, 's2': path, 'crs': crs}. Shared by collect_pair() (two dates)
+    and handoff.get_temporal_series() (N dates), so there's exactly one place that
+    knows how to export one date's imagery.
+    """
+    init()
+    crs = crs or get_utm_epsg(aoi)
+    start, end = date_window(date, window_days)
+    s2 = build_s2_composite(aoi, start, end).reproject(crs=crs, scale=scale)
+    s1 = build_s1_composite(aoi, start, end).reproject(crs=crs, scale=scale)
+    s2_path = os.path.join(out_dir, f"{aoi_name}_{date}_S2.tif")
+    s1_path = os.path.join(out_dir, f"{aoi_name}_{date}_S1.tif")
+    return {
+        "s2": _export_geotiff(s2, aoi, crs, scale, s2_path),
+        "s1": _export_geotiff(s1, aoi, crs, scale, s1_path),
+        "crs": crs,
+    }
+
+
 def collect_pair(
     aoi: "ee.Geometry",
     date_1: str,
@@ -155,17 +184,12 @@ def collect_pair(
 
     Returns {'s1_date1':path, 's2_date1':path, 's1_date2':path, 's2_date2':path, 'crs':crs}.
     """
-    init()
     crs = crs or get_utm_epsg(aoi)
     paths = {}
     for key, date in (("date1", date_1), ("date2", date_2)):
-        start, end = date_window(date, window_days)
-        s2 = build_s2_composite(aoi, start, end).reproject(crs=crs, scale=scale)
-        s1 = build_s1_composite(aoi, start, end).reproject(crs=crs, scale=scale)
-        s2_path = os.path.join(out_dir, f"{aoi_name}_{date}_S2.tif")
-        s1_path = os.path.join(out_dir, f"{aoi_name}_{date}_S1.tif")
-        paths[f"s2_{key}"] = _export_geotiff(s2, aoi, crs, scale, s2_path)
-        paths[f"s1_{key}"] = _export_geotiff(s1, aoi, crs, scale, s1_path)
+        one = collect_date(aoi, date, aoi_name, out_dir=out_dir, crs=crs, scale=scale, window_days=window_days)
+        paths[f"s2_{key}"] = one["s2"]
+        paths[f"s1_{key}"] = one["s1"]
     paths["crs"] = crs
     return paths
 
