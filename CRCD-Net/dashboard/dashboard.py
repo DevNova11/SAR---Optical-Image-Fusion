@@ -44,25 +44,25 @@ from semantics.land_cover_classifier import CLASS_COLORS, CLASS_NAMES, LAND_COVE
 
 DEMO_AOIS = {
     "chimakurthy_quarry (mining/deforestation)": {
-        "dates": ["2018-02-03", "2019-10-10", "2021-05-15", "2023-01-28"],
+        "dates": ["2018-02-03", "2019-10-03", "2021-05-31", "2023-01-28"],
         "date_1": "2018-02-03", "date_2": "2023-01-28",
         "latitude": 15.550, "longitude": 79.850,
         "story": "Granite quarry belt (Prakasam, AP) showing substantial vegetation clearing and quarry expansion.",
     },
     "bengaluru_sarjapur (rapid urbanization)": {
-        "dates": ["2019-02-01", "2020-10-15", "2022-06-01", "2024-02-01"],
+        "dates": ["2019-02-01", "2020-10-02", "2022-06-02", "2024-02-01"],
         "date_1": "2019-02-01", "date_2": "2024-02-01",
         "latitude": 12.845, "longitude": 77.645,
         "story": "Sarjapur Road corridor, Bengaluru showing conversion of agricultural land to residential IT complexes.",
     },
     "chennai_oragadam (industrial corridor)": {
-        "dates": ["2018-02-25", "2019-11-20", "2021-08-10", "2023-02-14"],
+        "dates": ["2018-02-25", "2019-10-23", "2021-06-19", "2023-02-14"],
         "date_1": "2018-02-25", "date_2": "2023-02-14",
         "latitude": 12.770, "longitude": 80.000,
         "story": "Oragadam industrial belt, Chennai showing large-scale industrial built-up expansion.",
     },
     "dubai_islands_v2 (coastal reclamation)": {
-        "dates": ["2016-02-01", "2018-06-01", "2020-10-01", "2023-02-01"],
+        "dates": ["2016-02-01", "2018-06-02", "2020-10-02", "2023-02-01"],
         "date_1": "2016-02-01", "date_2": "2023-02-01",
         "latitude": 25.290, "longitude": 55.330,
         "story": "Dubai Islands offshore project showing marine reclamation and urban infrastructure growth.",

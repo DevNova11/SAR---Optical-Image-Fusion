@@ -200,10 +200,10 @@ class MultiTemporalDataset:
 def get_default_temporal_dates(aoi_name: str, n_dates: int = 4) -> List[str]:
     """Generates standard multi-temporal date sequence for demo AOIs."""
     presets = {
-        "bengaluru_sarjapur": ["2019-02-01", "2020-10-15", "2022-06-01", "2024-02-01"],
-        "chennai_oragadam": ["2018-02-25", "2019-11-20", "2021-08-10", "2023-02-14"],
-        "chimakurthy_quarry": ["2018-02-03", "2019-10-10", "2021-05-15", "2023-01-28"],
-        "dubai_islands_v2": ["2016-02-01", "2018-06-01", "2020-10-01", "2023-02-01"],
+        "bengaluru_sarjapur": ["2019-02-01", "2020-10-02", "2022-06-02", "2024-02-01"],
+        "chennai_oragadam": ["2018-02-25", "2019-10-23", "2021-06-19", "2023-02-14"],
+        "chimakurthy_quarry": ["2018-02-03", "2019-10-03", "2021-05-31", "2023-01-28"],
+        "dubai_islands_v2": ["2016-02-01", "2018-06-02", "2020-10-02", "2023-02-01"],
     }
     for key, d_list in presets.items():
         if aoi_name.startswith(key):
