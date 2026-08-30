@@ -8,10 +8,14 @@ the constants, dark theme CSS, and AOI helpers every page needs.
 """
 from __future__ import annotations
 
+import base64
+import io
 import os
 import sys
 
+import numpy as np
 import streamlit as st
+from PIL import Image
 from pyproj import Geod
 
 # common.py always lives at CRCD-Net/dashboard/common.py, so this path is
@@ -107,6 +111,10 @@ _CSS = """
     --optical: #5aa8ff;
     --paper: #eaf2e6;
     --paper-dim: #8fa08c;
+    --ok: #7fffa0;
+    --warn: #f39c12;
+    --crit: #c0392b;
+    --info: #5aa8ff;
 }
 
 html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMain"] {
@@ -251,8 +259,298 @@ h1, h2, h3, h4 {
     outline-color: var(--phosphor) !important;
     box-shadow: none !important;
 }
+
+/* ---- System status pill (sidebar) ---- */
+.status-pill {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ok) !important; margin: 0.4rem 0 1rem 0;
+}
+.status-pill::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok); box-shadow: 0 0 6px 2px rgba(52,199,123,.6);
+}
+
+/* ---- Command-center action cards ---- */
+.action-card {
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-top: 2px solid var(--phosphor);
+    padding: 1.3rem 1.2rem 1.1rem 1.2rem;
+    min-height: 128px;
+    margin-bottom: 0.6rem;
+}
+.action-card .tag {
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--phosphor) !important; margin-bottom: 0.35rem;
+}
+.action-card h4 { margin: 0 0 0.35rem 0; font-size: 1.15rem; }
+.action-card p { color: var(--paper-dim) !important; font-size: 0.85rem; margin: 0; }
+
+/* ---- Workflow stepper ---- */
+.stepper-wrap {
+    display: flex; align-items: center; width: 100%;
+    margin: 0.6rem 0 1.6rem 0; flex-wrap: wrap;
+    font-family: 'IBM Plex Mono', monospace;
+}
+.step-node { display: flex; align-items: center; }
+.step-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.68rem; font-weight: 700; flex-shrink: 0;
+    border: 1px solid var(--hairline); color: var(--paper-dim);
+    background: var(--panel);
+}
+.step-dot.done { background: var(--phosphor); border-color: var(--phosphor); color: var(--void); }
+.step-dot.active { border-color: var(--phosphor); color: var(--phosphor); box-shadow: 0 0 0 3px rgba(54,224,240,.15); }
+.step-label {
+    font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase;
+    margin-left: 0.5rem; margin-right: 0.9rem; color: var(--paper-dim);
+    white-space: nowrap;
+}
+.step-label.done, .step-label.active { color: var(--paper); }
+.step-connector { width: 34px; height: 1px; background: var(--hairline); margin-right: 0.9rem; }
+.step-connector.done { background: var(--phosphor); }
+
+/* ---- Reliability / evidence bars ---- */
+.rbar-row { margin-bottom: 0.65rem; }
+.rbar-label {
+    display: flex; justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.72rem;
+    color: var(--paper-dim); margin-bottom: 3px;
+}
+.rbar-label b { color: var(--paper); font-weight: 600; }
+.rbar-track { height: 7px; background: var(--hairline-soft); width: 100%; }
+.rbar-fill { height: 7px; background: var(--phosphor); }
+
+/* ---- Before / After comparison slider ---- */
+.cmp-wrap {
+    position: relative; width: 100%;
+    border: 1px solid var(--hairline); user-select: none; line-height: 0;
+}
+.cmp-wrap img { display: block; width: 100%; height: auto; pointer-events: none; }
+.cmp-after-img { position: relative; z-index: 1; }
+.cmp-before-img { position: absolute; top: 0; left: 0; z-index: 2; }
+.cmp-divider {
+    position: absolute; top: 0; bottom: 0; width: 2px;
+    background: var(--phosphor); z-index: 3; box-shadow: 0 0 8px rgba(54,224,240,.7);
+}
+.cmp-tag {
+    position: absolute; top: 8px; font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+    background: rgba(6,10,19,.72); padding: 3px 8px; color: var(--paper); z-index: 4;
+}
+
+/* ---- Explanation / evidence card ---- */
+.explain-card {
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--ok); padding: 0.9rem 1.1rem; margin: 0.6rem 0 1rem 0;
+}
+.explain-card .line { font-size: 0.86rem; color: var(--paper); margin: 3px 0; }
+.explain-card .line::before { content: "\2713  "; color: var(--ok); font-weight: 700; }
+
+/* ---- Motion / hover polish ---- */
+@keyframes crcdFadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes crcdPulse {
+    0% { box-shadow: 0 0 0 0 rgba(127,255,160,.55); }
+    70% { box-shadow: 0 0 0 8px rgba(127,255,160,0); }
+    100% { box-shadow: 0 0 0 0 rgba(127,255,160,0); }
+}
+.hero, .action-card, .card, .metric-card { animation: crcdFadeUp 0.45s ease-out both; }
+.action-card, .card {
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.action-card:hover, .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--phosphor);
+    box-shadow: 0 8px 22px rgba(0,0,0,.35);
+}
+.metric-card { transition: border-color 0.18s ease, transform 0.18s ease; }
+.metric-card:hover { border-color: var(--phosphor); transform: translateY(-2px); }
+.status-pill::before { animation: crcdPulse 2s infinite; }
+.step-dot.active { animation: crcdPulse 1.8s infinite; }
+
+/* ---- Live pipeline checklist ---- */
+.live-stage-box {
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-left: 3px solid var(--phosphor); padding: 0.9rem 1.1rem;
+    margin: 0.5rem 0 1rem 0; font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem; animation: crcdFadeUp 0.3s ease-out both;
+}
+.live-stage-box .stage-title {
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--phosphor);
+    font-size: 0.68rem; margin-bottom: 0.55rem;
+}
+.live-stage-box .stage-row { display: flex; align-items: center; gap: 0.5rem; padding: 2px 0; color: var(--paper-dim); }
+.live-stage-box .stage-row.working { color: var(--paper); }
+.live-stage-box .dotpending { width: 6px; height: 6px; border-radius: 50%; border: 1px solid var(--hairline); flex-shrink: 0; }
+.live-stage-box .dotworking { width: 6px; height: 6px; border-radius: 50%; background: var(--phosphor); flex-shrink: 0; animation: crcdPulse 1.2s infinite; }
+
+/* ---- Gauge / donut (conic-gradient, real values only) ---- */
+.gauge-wrap { display: flex; flex-direction: column; align-items: center; }
+.gauge-ring {
+    width: 92px; height: 92px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+}
+.gauge-inner {
+    width: 70px; height: 70px; border-radius: 50%; background: var(--panel);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.gauge-inner .val { font-family: 'IBM Plex Mono', monospace; font-weight: 700; color: var(--phosphor); font-size: 1rem; }
+.gauge-inner .lbl { font-size: 0.58rem; color: var(--paper-dim); letter-spacing: 0.05em; text-transform: uppercase; }
+.gauge-caption { font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--paper-dim); margin-top: 0.4rem; }
+
+/* ---- Priority distribution bar ---- */
+.priority-stack { display: flex; width: 100%; height: 14px; overflow: hidden; border: 1px solid var(--hairline); }
+.priority-legend { display: flex; gap: 14px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 0.68rem; color: var(--paper-dim); margin-top: 6px; }
+.priority-legend span.sw { display: inline-block; width: 8px; height: 8px; margin-right: 4px; vertical-align: middle; }
+
+/* ---- Data-source chips (SAR / Optical / Fused) ---- */
+.source-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 0.7rem;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--paper);
+    background: var(--panel); border: 1px solid var(--hairline);
+    border-top: 2px solid var(--phosphor); padding: 6px 12px; margin-bottom: 6px;
+}
 </style>
 """
+
+
+# --------------------------------------------------
+# REUSABLE UI COMPONENTS
+# --------------------------------------------------
+def render_status_pill(text: str = "System Ready") -> None:
+    st.markdown(f'<div class="status-pill">{text}</div>', unsafe_allow_html=True)
+
+
+def render_workflow_stepper(labels: list[str], current_index: int) -> None:
+    """current_index: steps before it are 'done', that index is 'active', after are pending."""
+    parts = ['<div class="stepper-wrap">']
+    for i, label in enumerate(labels):
+        state = "done" if i < current_index else ("active" if i == current_index else "")
+        mark = "✓" if state == "done" else str(i + 1)
+        parts.append(
+            f'<div class="step-node"><div class="step-dot {state}">{mark}</div>'
+            f'<div class="step-label {state}">{label}</div></div>'
+        )
+        if i < len(labels) - 1:
+            conn_state = "done" if i < current_index else ""
+            parts.append(f'<div class="step-connector {conn_state}"></div>')
+    parts.append("</div>")
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+def render_gauge(value_0_1: float, label: str, caption: str = "") -> None:
+    """Conic-gradient ring gauge -- purely a styled readout of a real 0-1 value."""
+    pct = max(0.0, min(1.0, float(value_0_1))) * 100
+    st.markdown(
+        f"""
+        <div class="gauge-wrap">
+          <div class="gauge-ring" style="background: conic-gradient(var(--phosphor) {pct}%, var(--hairline-soft) {pct}% 100%);">
+            <div class="gauge-inner"><div class="val">{pct:.0f}%</div><div class="lbl">{label}</div></div>
+          </div>
+          {f'<div class="gauge-caption">{caption}</div>' if caption else ''}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_priority_distribution(counts: dict) -> None:
+    """counts: {'CRITICAL': n, 'HIGH': n, 'MEDIUM': n, 'LOW': n} -- computed from real hotspot data."""
+    colors = {"CRITICAL": "#c0392b", "HIGH": "#e67e22", "MEDIUM": "#f39c12", "LOW": "#7f8c8d"}
+    total = sum(counts.values()) or 1
+    segments = "".join(
+        f'<div style="width:{counts.get(k,0)/total*100:.2f}%; background:{colors[k]};"></div>'
+        for k in ["CRITICAL", "HIGH", "MEDIUM", "LOW"] if counts.get(k, 0) > 0
+    )
+    legend = "".join(
+        f'<span><span class="sw" style="background:{colors[k]};"></span>{k} ({counts.get(k,0)})</span>'
+        for k in ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
+    )
+    st.markdown(
+        f'<div class="priority-stack">{segments}</div><div class="priority-legend">{legend}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_live_stage_checklist(stages: list[str], working_index: int) -> None:
+    """Static, honestly-labeled list of the pipeline stages actually run -- no fabricated %."""
+    rows = []
+    for i, s in enumerate(stages):
+        if i < working_index:
+            rows.append(f'<div class="stage-row"><span class="dotpending" style="background:var(--phosphor); border-color:var(--phosphor);"></span>{s} -- done</div>')
+        elif i == working_index:
+            rows.append(f'<div class="stage-row working"><span class="dotworking"></span>{s} -- running...</div>')
+        else:
+            rows.append(f'<div class="stage-row"><span class="dotpending"></span>{s}</div>')
+    st.markdown(
+        f'<div class="live-stage-box"><div class="stage-title">Pipeline Stages</div>{"".join(rows)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_source_chip(text: str) -> None:
+    st.markdown(f'<div class="source-chip">{text}</div>', unsafe_allow_html=True)
+
+
+def render_reliability_bar(label: str, value_0_1: float) -> None:
+    pct = max(0.0, min(1.0, float(value_0_1))) * 100
+    st.markdown(
+        f"""
+        <div class="rbar-row">
+          <div class="rbar-label"><span>{label}</span><b>{pct:.1f}%</b></div>
+          <div class="rbar-track"><div class="rbar-fill" style="width:{pct:.1f}%;"></div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _np_to_png_b64(img: np.ndarray) -> str:
+    """Convert a HxWx3 float [0,1] or uint8 array to a base64 PNG data URI."""
+    arr = np.asarray(img)
+    if arr.dtype != np.uint8:
+        arr = np.clip(arr, 0.0, 1.0)
+        arr = (arr * 255).astype(np.uint8)
+    if arr.ndim == 2:
+        arr = np.stack([arr] * 3, axis=-1)
+    buf = io.BytesIO()
+    Image.fromarray(arr).save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def render_compare_slider(before_img: np.ndarray, after_img: np.ndarray,
+                           before_label: str = "BEFORE", after_label: str = "AFTER",
+                           key: str = "cmp") -> None:
+    """Drag-to-reveal before/after image comparison slider (pure CSS/HTML, no data change)."""
+    before_uri = _np_to_png_b64(before_img)
+    after_uri = _np_to_png_b64(after_img)
+    slider_val = st.slider(
+        f"Drag to compare -- {before_label} vs {after_label}", 0, 100, 50,
+        key=f"slider_{key}", label_visibility="collapsed",
+    )
+    clip_right = 100 - slider_val
+    st.markdown(
+        f"""
+        <div class="cmp-wrap">
+          <div class="cmp-tag" style="right:8px;">{after_label}</div>
+          <div class="cmp-tag" style="left:8px;">{before_label}</div>
+          <div class="cmp-after-img"><img src="{after_uri}" /></div>
+          <div class="cmp-before-img" style="clip-path: inset(0 {clip_right}% 0 0);">
+            <img src="{before_uri}" />
+          </div>
+          <div class="cmp-divider" style="left:{slider_val}%;"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def configure_page(page_title: str) -> None:
@@ -271,6 +569,7 @@ def configure_page(page_title: str) -> None:
     with st.sidebar:
         st.title("CRCD-Net")
         st.caption("Explainable SAR-Optical Provenance Console")
+        render_status_pill("System Ready")
         st.markdown("---")
         st.markdown(
             """

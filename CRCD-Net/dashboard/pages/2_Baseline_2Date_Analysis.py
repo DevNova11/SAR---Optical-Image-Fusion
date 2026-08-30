@@ -8,6 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import common
 from common import DATA_DIR, DEMO_AOIS
+from common import render_compare_slider
 
 import numpy as np
 import streamlit as st
@@ -60,6 +61,13 @@ if "baseline_result" in st.session_state:
     with rcol3:
         dir_label = res.metadata.get("direction_heuristics", {}).get("label", "n/a")
         st.markdown(f'<div class="metric-card"><h4>Direction Heuristic</h4><p style="font-size:1.1rem;">{dir_label}</p></div>', unsafe_allow_html=True)
+
+    st.write("**Drag to Compare**")
+    render_compare_slider(
+        np.clip(fused_1[..., :3], 0, 1), np.clip(fused_2[..., :3], 0, 1),
+        before_label=str(res.metadata.get("date1")), after_label=str(res.metadata.get("date2")),
+        key="baseline",
+    )
 
     icol1, icol2, icol3 = st.columns(3)
     with icol1:

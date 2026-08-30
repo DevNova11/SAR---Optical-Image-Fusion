@@ -15,6 +15,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import common
 from common import DATA_DIR
+from common import (
+    render_compare_slider, render_gauge, render_priority_distribution,
+    render_reliability_bar, render_source_chip,
+)
 
 import numpy as np
 import pandas as pd
@@ -80,6 +84,28 @@ with mc4:
 with mc5:
     st.markdown(f'<div class="metric-card"><h4>Persistent Changes</h4><p style="font-size:1.4rem; color:#7fffa0;">{m["mean_persistence"]:.1f}%</p></div>', unsafe_allow_html=True)
 
+gcol1, gcol2 = st.columns([1, 3])
+with gcol1:
+    render_gauge(m["mean_confidence"], "Confidence", caption="Composite score")
+with gcol2:
+    st.write("**Hotspot Priority Distribution**")
+    # prov_res.metrics only carries critical/high counts -- medium/low live
+    # on provenance.summary instead, under different key names (no
+    # "_priority" in the middle). Pulling all 4 from summary keeps this
+    # consistent and avoids silently showing 0 for medium/low, which is
+    # most of the hotspots in practice.
+    _summary = prov_res.provenance.summary
+    _pri_counts = {
+        "CRITICAL": _summary.get("critical_hotspots", 0),
+        "HIGH": _summary.get("high_hotspots", 0),
+        "MEDIUM": _summary.get("medium_hotspots", 0),
+        "LOW": _summary.get("low_hotspots", 0),
+    }
+    if sum(_pri_counts.values()) > 0:
+        render_priority_distribution(_pri_counts)
+    else:
+        st.caption("No hotspots to distribute.")
+
 st.markdown("---")
 
 # Metrics table. Note: this pipeline computes change/provenance metrics
@@ -132,6 +158,14 @@ with t_tab1:
             f"observation -- the images below are a synthetic blend between the real "
             f"anchor dates, not actual Sentinel-1/2 imagery."
         )
+
+    chcol1, chcol2, chcol3 = st.columns(3)
+    with chcol1:
+        render_source_chip("SAR -- Sentinel-1")
+    with chcol2:
+        render_source_chip("Optical -- Sentinel-2")
+    with chcol3:
+        render_source_chip("Fused -- CRCD-Net")
 
     vcol1, vcol2, vcol3 = st.columns(3)
     with vcol1:
@@ -314,14 +348,28 @@ with t_tab4:
 
         st.markdown(
             f"""
-            <div style="background:var(--panel); border:1px solid var(--hairline); padding:1rem; margin-bottom:1rem;">
+            <div style="background:var(--panel); border:1px solid var(--hairline); padding:1rem; margin-bottom:0.6rem;">
             <h3 style="margin-top:0; color:var(--phosphor); font-size:1.3rem;">Hotspot {hs.hotspot_id} &mdash; <span class="badge-{hs.priority_level.lower()}">{hs.priority_level} PRIORITY</span> (Score: {hs.priority_score:.2f})</h3>
-            <p style="font-size:0.92rem; color:var(--paper); line-height:1.6;">
-            <b>Scientific Explanation:</b><br>{hs.explanation}
-            </p>
             </div>
             """,
             unsafe_allow_html=True
+        )
+        st.markdown(
+            f"""
+            <div class="explain-card">
+            <div style="font-family:'IBM Plex Mono',monospace; font-size:0.68rem; letter-spacing:0.08em;
+            text-transform:uppercase; color:var(--paper-dim); margin-bottom:0.4rem;">Why was this region flagged?</div>
+            <div class="line">{hs.explanation}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.write(f"**Fused Representation: {prov_res.dates[0]} vs {prov_res.dates[-1]}**")
+        render_compare_slider(
+            crop_fused_t1, crop_fused_tn,
+            before_label=f"T1 {prov_res.dates[0]}", after_label=f"TN {prov_res.dates[-1]}",
+            key=f"hs_{hs.hotspot_id}",
         )
 
         # Visual comparison row
@@ -350,6 +398,14 @@ with t_tab4:
             st.metric("Optical Spectral Shift", f"{hs.optical_evidence:.2f} / 1.0")
         with ec4:
             st.metric("Sensor Agreement", f"{hs.sensor_agreement:.2f} / 1.0")
+
+        gecol1, gecol2 = st.columns([1, 2])
+        with gecol1:
+            render_gauge(hs.sensor_agreement, "Agreement", caption="SAR + Optical")
+        with gecol2:
+            render_reliability_bar("SAR Structural Shift", hs.sar_evidence)
+            render_reliability_bar("Optical Spectral Shift", hs.optical_evidence)
+            render_reliability_bar("Sensor Agreement", hs.sensor_agreement)
 
         # Step-by-step trajectory timeline
         st.markdown("#### Step-by-Step Observation Trajectory")

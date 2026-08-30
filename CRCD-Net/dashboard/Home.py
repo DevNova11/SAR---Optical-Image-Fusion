@@ -17,6 +17,7 @@ from streamlit_folium import st_folium
 
 import common
 from common import ALLOW_LIVE_GEE, AOI_AREA_WARNING_KM2, DATA_DIR, DEMO_AOIS, MIN_DAYS_OLD
+from common import render_live_stage_checklist, render_workflow_stepper
 
 common.configure_page("Home")
 
@@ -79,10 +80,36 @@ with c4:
         unsafe_allow_html=True,
     )
 
+st.markdown('<div class="section-title">Jump To</div><div class="section-underline"></div>', unsafe_allow_html=True)
+jc1, jc2 = st.columns(2)
+with jc1:
+    st.markdown(
+        '<div class="action-card"><div class="tag">Compatibility</div>'
+        '<h4>Baseline 2-Date</h4><p>Run the standard fused pixel-difference '
+        'comparison across two dates only.</p></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Open Baseline Analysis", use_container_width=True, key="cc_baseline"):
+        st.switch_page("pages/2_Baseline_2Date_Analysis.py")
+with jc2:
+    st.markdown(
+        '<div class="action-card"><div class="tag">Research</div>'
+        '<h4>Evaluation Suite</h4><p>Benchmark the proposed system against '
+        'baselines with a 7-stage component ablation study.</p></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Open Evaluation Suite", use_container_width=True, key="cc_eval"):
+        st.switch_page("pages/3_Research_Ablation_Suite.py")
+
 # --------------------------------------------------
 # AOI + DATE SELECTION -> RUN ANALYSIS
 # --------------------------------------------------
 st.markdown('<div class="section-title">Multi-Temporal Change Provenance & Early Warning Console</div><div class="section-underline"></div>', unsafe_allow_html=True)
+
+render_workflow_stepper(
+    ["AOI", "Data", "Fusion", "Change", "Insights"],
+    current_index=5 if any(k.startswith("prov_result_") for k in st.session_state) else 0,
+)
 
 area_source_options = ["Demo Area"] + (["Custom Location"] if ALLOW_LIVE_GEE else [])
 area_source = st.radio("Area Source", area_source_options, horizontal=True)
@@ -243,6 +270,14 @@ if run_btn:
         if use_custom else
         f"Running multi-temporal fusion, semantic classification, persistence verification, and hotspot priority ranking for {aoi_name}..."
     )
+    _stage_labels = [
+        "Multi-temporal provenance pipeline (AOI -> fusion -> change -> hotspots)",
+        "7-stage benchmark & ablation suite",
+    ]
+    _stage_box = st.empty()
+    with _stage_box.container():
+        render_live_stage_checklist(_stage_labels, working_index=0)
+
     with st.spinner(spinner_msg):
         prov_res = run_provenance_pipeline(
             aoi_name, dates=dates_list, aoi_geometry=aoi_geometry, data_dir=DATA_DIR
@@ -253,6 +288,9 @@ if run_btn:
         # everything else here is unchanged, per-AOI cached results, same
         # as before the multi-page split.
         st.session_state["last_run_aoi_name"] = aoi_name
+
+        with _stage_box.container():
+            render_live_stage_checklist(_stage_labels, working_index=1)
 
         # Also run the ablation/benchmark suite for this same AOI + dates,
         # so the Research Evaluation page has results ready without a
@@ -269,6 +307,8 @@ if run_btn:
                 # Never let a benchmark failure hide the (successful)
                 # provenance result above -- just surface it and move on.
                 st.session_state[f"bench_{aoi_name}_error"] = str(exc)
+
+        _stage_box.empty()
 
         if use_custom:
             known = st.session_state.setdefault("custom_aoi_history", [])
