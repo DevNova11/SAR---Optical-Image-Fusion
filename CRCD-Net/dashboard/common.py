@@ -418,6 +418,21 @@ h1, h2, h3, h4 {
     background: var(--panel); border: 1px solid var(--hairline);
     border-top: 2px solid var(--phosphor); padding: 6px 12px; margin-bottom: 6px;
 }
+
+/* ---- streamlit-folium height-autosize workaround ----
+   st_folium's own resize logic reports its <html> scrollHeight to
+   Streamlit (via Streamlit.setFrameHeight), which comes back stale/way
+   too tall (~1622px measured) even though the map's own #root div is
+   exactly the `height=` px passed to st_folium (420px here) -- leaving
+   a large blank gap below the map. Forcing the iframe back to its real
+   content height fixes it without touching the component's internals.
+   stCustomComponentV1 is currently only used by the AOI draw map in this
+   app; if a second custom component is added later, this will need a
+   more specific selector (e.g. scoped by the containing st-key- class). */
+iframe.stCustomComponentV1 {
+    height: 460px !important;
+    max-height: 460px !important;
+}
 </style>
 """
 
