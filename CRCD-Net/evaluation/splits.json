@@ -1,0 +1,47 @@
+{
+  "_note": "SHARED AND FROZEN once agreed. v2: rebalanced after adding 8 screened rural AOIs; v1 had Bare Land at 0.3% of train but 36% of val. Split by whole AOI, never by patch. Every split contains all 5 classes. Changing this invalidates everyone's numbers: announce before editing. The fusion team's v1 val/test numbers are NOT comparable to this version.",
+  "train": [
+    "anantapur_city",
+    "bandipur_dry_forest",
+    "bengaluru_sarjapur",
+    "cauvery_rural",
+    "chennai_oragadam",
+    "chilika_lagoon",
+    "chimakurthy_quarry",
+    "custom_11p0100_76p9505",
+    "custom_11p0104_76p6499",
+    "custom_11p0104_76p9499",
+    "custom_12p7400_77p8300",
+    "custom_25p1181_55p1333",
+    "custom_25p2900_55p3400",
+    "custom_25p3333_55p2681",
+    "godavari_delta",
+    "guntur_city",
+    "jaisalmer_desert_town",
+    "kolar_town",
+    "ludhiana_city",
+    "nagarhole_forest",
+    "ooty_town",
+    "punjab_rural",
+    "sandur_mining",
+    "thanjavur_city",
+    "thar_dunes"
+  ],
+  "val": [
+    "custom_18p6600_81p2000",
+    "dubai_islands_v2",
+    "madikeri_forest_town",
+    "mandya_city",
+    "nagarjuna_sagar",
+    "telangana_rural"
+  ],
+  "test": [
+    "bailadila_mining_test",
+    "custom_12p9532_80p1416",
+    "custom_25p2986_55p3123",
+    "hyderabad_outskirts",
+    "krs_reservoir",
+    "kutch_flats",
+    "parbhani_rural"
+  ]
+}

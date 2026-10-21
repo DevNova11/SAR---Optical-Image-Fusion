@@ -28,7 +28,8 @@ DW_BANDS = ["built", "trees"]
 
 
 def build_dw_snapshot(
-    aoi: "ee.Geometry", target_date: str, window_days: int = DEFAULT_WINDOW_DAYS, scale: int = 10
+    aoi: "ee.Geometry", target_date: str, window_days: int = DEFAULT_WINDOW_DAYS, scale: int = 10,
+    bands: "list[str] | None" = None,
 ) -> "ee.Image":
     """The nearest-to-`target_date` Dynamic World scene that actually has coverage over `aoi`.
 
@@ -75,7 +76,7 @@ def build_dw_snapshot(
         chosen_index = max(candidates, key=lambda f: f["properties"]["valid_count"])["properties"]["index"]
 
     chosen = ee.Image(dw.filter(ee.Filter.eq("system:index", chosen_index)).first())
-    return chosen.select(DW_BANDS).clip(aoi)
+    return chosen.select(bands or DW_BANDS).clip(aoi)
 
 
 def get_land_cover_stats(aoi: "ee.Geometry", date: str, window_days: int = DEFAULT_WINDOW_DAYS, scale: int = 10) -> dict:
